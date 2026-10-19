@@ -26,7 +26,7 @@
 
 ## LUT 照片开发进度
 
-已提供独立的[离线 LUT 参考工具](research/README.md)。按最新要求，近期优先吸收上游 v2.1 的原生 Creative Look 拟合路线；[第二十九轮](research/LUT链路调查记录-第二十九轮.md)已完成固定源码审计，[第三十轮](research/LUT链路调查记录-第三十轮.md)已接入 CUBE→原生修正表、ST/桥接契约、参考预测和显式区域误差；[第三十一轮](research/LUT链路调查记录-第三十一轮.md)补齐配对标定、拟合前冻结和多场景分区验收，见[使用说明](docs/NATIVE-VALIDATION.md)。N2 离线工具链已具备，真实 ST 数据和相机精度仍待 N4 验证，下一步为 N3 独立 Mac 适配。上游已有单台 Windows 机身的更新报告，不能作为本地 Mac 安装或真实色彩精度验证。任意 3D LUT 的 M2–M4 保留为研究支线，其运行配置、有效传输、句柄/MAIN 身份和时序仍未闭合。总状态见[里程碑表](plan.md)，继续任务读[当前交接](research/HANDOFF.md)。旧 FL2/FL3 锁和安装器保持原样；相机实测后置，进入前提示，目前无需连接相机。
+已提供独立的[离线 LUT 参考工具](research/README.md)。按最新要求，近期优先吸收上游 v2.1 的原生 Creative Look 拟合路线；[第二十九轮](research/LUT链路调查记录-第二十九轮.md)已完成固定源码审计，[第三十轮](research/LUT链路调查记录-第三十轮.md)已接入 CUBE→原生修正表、ST/桥接契约、参考预测和显式区域误差；[第三十一轮](research/LUT链路调查记录-第三十一轮.md)补齐配对标定、拟合前冻结和多场景分区验收，见[使用说明](docs/NATIVE-VALIDATION.md)。N2 离线工具链已具备，真实 ST 数据和相机精度仍待 N4 验证，[第三十二轮](research/LUT链路调查记录-第三十二轮.md)开始 N3，完成[Mac 编译探针与合成事务基础](docs/CUSTOM-MAC-OFFLINE.md)；真实固件适配、持久化恢复及 USB 接入仍未实现。上游已有单台 Windows 机身的更新报告，不能作为本地 Mac 安装或真实色彩精度验证。任意 3D LUT 的 M2–M4 保留为研究支线，其运行配置、有效传输、句柄/MAIN 身份和时序仍未闭合。总状态见[里程碑表](plan.md)，继续任务读[当前交接](research/HANDOFF.md)。旧 FL2/FL3 锁和安装器保持原样；相机实测后置，进入前提示，目前无需连接相机。
 
 ## 先确认设备和版本
 

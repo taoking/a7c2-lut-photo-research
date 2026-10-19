@@ -28,3 +28,5 @@ USB 服务协议来自 [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-R
 - Sony A7C II 2.01 和 Alpha 1 II 4.00 是上游程序/色彩研究的数据来源。Sony 商标与固件资料权利仍归权利人所有。
 
 本项目与上述作者及 Sony 无官方合作或背书关系。
+
+N3 编译探针与合成事务参考上游固定 v2.1 的 `nativebuild.py`、`device_layout.py`、`devicejob.py` 及资源/设置保护边界；使用其要求的 Zig 0.13.0 进行中性代码验证，没有复制或运行设备模块、固件资产或私人事务清单。真实机内布局及保护研究继续归原作者，本项目合成模型不替代这些验证。

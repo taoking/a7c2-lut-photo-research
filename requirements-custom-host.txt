@@ -1,0 +1,4 @@
+# Optional N3 host build probes only; install in a separate research environment.
+# Zig version matches the audited upstream v2.1 requirements-device.txt.
+ziglang==0.13.0
+pyelftools==0.32
