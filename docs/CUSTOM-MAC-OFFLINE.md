@@ -44,7 +44,7 @@ Zig 0.13.0 提供 [Windows x86-64 Python wheel](https://pypi.org/project/ziglang
 
 [Docker 官方文档](https://docs.docker.com/build/building/multi-platform/)区分交叉编译、原生多节点和 QEMU 仿真。构建时可用宿主架构的 Linux 容器运行交叉编译器，目标仍设为 `aarch64-linux-gnu`，不必为编译先仿真 ARM64；若执行通用 ARM64 测试程序，才另行考虑 ARM64 容器/仿真。Windows 上使用 Docker Linux 容器还需满足 [Docker Desktop 的系统及 WSL 2/虚拟化要求](https://docs.docker.com/desktop/setup/install/windows-install/)，本轮不要求安装或改变这些配置。
 
-从已审阅的上游代码可知，相机 worker 访问机身特定程序、请求文件和系统状态。普通 Linux/ARM64 容器没有这些 Sony 环境；Windows 本身也不直接加载 Linux ELF。因此不能用 Docker/Windows 运行相机模块来替代机内验证，也不能根据一般 ARM64 仿真结果宣称相机安装通过。当前只编译/解析中性探针，不加载相机模块。
+从已审阅的上游代码可知，相机 worker 访问机身特定程序、请求文件和系统状态。普通 Linux/ARM64 容器没有这些 Sony 环境；Windows 本身也不直接加载 Linux ELF。因此不能用 Docker/Windows 运行相机模块来替代机内验证，也不能根据一般 ARM64 仿真结果宣称相机安装通过。第三十二轮只编译/解析中性探针；第三十五轮另以合成头完成[真实 C 源码编译与 ABI 核验](WORKER-CONTRACTS.md)，两者都不加载或执行相机模块。
 
 **目前不缺另一台电脑，不需要用户准备 Docker、连接惠普电脑或连接相机。** 后续若确实需要 Windows 对照验证，会先说明所需 CPU/系统/Python 信息与具体动作；真机阶段再提示连接、实际电量、独立介质备份及拍摄协助。没有实际需要时不提前收集设备身份、私人备份或远程访问凭据。
 
@@ -94,7 +94,7 @@ S0/S1/S2/S3 分别是“原厂、FL23、历史六槽、已知部分槽”的**�
 N3 保持部分完成，下一轮继续电脑端：
 
 1. 资源/设置保护源、68 文件名及合成格式契约已单独固定并离线验证；真实布局/表检查、AP 描述符绑定和完整 BK4 解析仍缺，没有审阅资产就拒绝实际规划。
-2. 核对实际 worker 编译契约、报告 ABI、运行权限/重定位及逐事务来源/目标/逆向；中性编译探针不能代替真实模块验证。Keystone 与其相关指令测试另行处理。
+2. 固定上游真实 C 已以合成头编译/核对报告 ABI，见[第三十五轮](WORKER-CONTRACTS.md)；实际机身来源绑定、Sony 加载器/BSS/生命周期及设备执行仍缺，不能把中性或合成头构建当成安装验证。Keystone 与其相关指令测试另行处理。
 3. 合成数据的持久化意图/结果、共享进程锁和中断只读分类已完成离线原型；真实全局相机锁、设备恢复及 Mac USB 生命周期仍缺，当前不得调用设备。
 4. 为新 Custom 流程取得两份实际独立存储介质及完整备份核对证据；原厂首次安装、Mac 写入和物理恢复继续未验证。
 

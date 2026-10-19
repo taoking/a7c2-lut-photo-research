@@ -34,3 +34,5 @@ USB 服务协议来自 [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-R
 第三十三轮在独立的 `lutphoto/_vendor/sonycontracts` 原字节保留上游 `resources.py`、`devicesettings.py` 与 68 个资源文件名清单，来源哈希、路径及完整 MIT 许可见[来源记录](lutphoto/_vendor/sonycontracts/README.md)。只使用资源内存改名/逆向和设置比较保护；没有 Sony UXC 内容、真实 AP 识别/描述符适配器或 USB 执行。新增的边界检查、合成格式夹具与命令行见[N3 离线契约](docs/CUSTOM-CONTRACTS.md)。
 
 第三十四轮对照固定上游 `devicejob.py`、`devicelock.py` 及继承的 Mac 全局锁审阅持久化/独占边界，新增独立的合成磁盘日志与只读分类原型；没有复制或运行上游设备执行模块，没有将临时目录的进程锁称为真实相机锁已接通。
+
+第三十五轮通过[独立 14 成员清单](research/upstream-worker.lock.json)固定上游布局、设置、构建、报告与 C 来源；只在临时目录原字节包含上游 C，以自制头编译并附加 ABI 静态断言，完整包许可也纳入固定清单，不分发生成模块或固件衍生资产。源码、保护策略及报告设计归原作者；新增审计入口、严格字节校验和 ELF 范围检查见[说明](docs/WORKER-CONTRACTS.md)。
