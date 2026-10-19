@@ -3,6 +3,7 @@ import argparse
 from dataclasses import dataclass
 import hashlib
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -41,6 +42,13 @@ def bounded_read(path, limit):
 
 
 def read_json(path):
+    return decode_json(bounded_read(path, MAX_JSON))
+
+
+def decode_json(raw):
+    """Decode the exact bounded bytes that callers may also fingerprint."""
+    if not isinstance(raw, bytes) or len(raw) > MAX_JSON:
+        raise ValueError('Expected bounded JSON bytes')
     def unique(items):
         result = {}
         for key, value in items:
@@ -51,13 +59,13 @@ def read_json(path):
     def finite(value):
         raise ValueError('Non-finite JSON value')
     try:
-        result = json.loads(bounded_read(path, MAX_JSON).decode('utf-8'),
+        result = json.loads(raw.decode('utf-8'),
                             object_pairs_hook=unique, parse_constant=finite)
         pending = [(result, 0)]; visited = 0
         while pending:
             value, depth = pending.pop(); visited += 1
-            if depth > 32 or visited > 100000:
-                raise ValueError('JSON nesting or item limit exceeded')
+            if depth > 32 or visited > 100000 or isinstance(value, float) and not math.isfinite(value):
+                raise ValueError('JSON nesting, item or finite number limit exceeded')
             children = value.values() if isinstance(value, dict) else value if isinstance(value, list) else ()
             pending.extend((child, depth + 1) for child in children)
         return result

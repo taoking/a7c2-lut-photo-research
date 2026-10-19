@@ -42,3 +42,5 @@ USB 服务协议来自 [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-R
 第三十七轮的[完整程序身份/描述符只读实现](docs/PROGRAM-IDENTITY.md)依据同一固定包内 QAQLeonard 的 `device_layout/six/devicesettings` 和 runtime 规则，不导入归档 Python，不公开 AP 模板、补丁窗口或程序资产。自制夹具验证和虚拟流式重建/额外别名限制由本仓库补充；原始设计和来源身份研究归原作者。
 
 第三十八轮[描述符/快照只读绑定](docs/SETTINGS-BINDING.md)沿用 QAQLeonard 的描述符/设置保存保护设计与 ma1co BK4 格式来源，复用此前固定和保留许可的纯比较函数。新增只读连接、reset/分配布局与负例不改变原作者归属；未引入上游设备 planner 或执行模块。
+
+第三十九轮[材料清单](docs/IMPORT-MATERIALS.md)连接本仓库 N2 候选、QAQLeonard 的程序/标签布局和既有 68 资源内存改名/逆向规则；继续保留 ma1co 设置格式来源与完整许可。新增相对目录/单次 JSON 读取指纹及声明一致性校验不改变上游归属，不分发资源目标、固件或设备事务。

@@ -60,7 +60,7 @@ mkdir -p research/output/contracts-demo
 
 ## 剩余工作
 
-N3 仍为部分完成：第三十七轮已将 `device_layout/six` 规则接入[完整程序身份/描述符只读检查](PROGRAM-IDENTITY.md)，第三十八轮已有[描述符与快照的只读绑定](SETTINGS-BINDING.md)，真实程序/BK4 正例、表资产/事务绑定、BK4 兼容/角色与新鲜来源证明、机身绑定 worker 和 Mac USB/全局锁仍缺；第三十五轮已完成[固定来源规则及真实 C 的合成头构建/报告 ABI](WORKER-CONTRACTS.md)，Sony 加载边界仍未验证。第三十四轮已增加[合成持久化日志及进程锁原型](CUSTOM-JOURNAL.md)，不能替代设备事务或恢复。[总计划](../plan.md)和[交接](../research/HANDOFF.md)记录下一轮顺序；旧 FL23 安装器、运行锁、默认单份备份不变。
+N3 仍为部分完成：第三十七轮已将 `device_layout/six` 规则接入[完整程序身份/描述符只读检查](PROGRAM-IDENTITY.md)，第三十八轮已有[描述符与快照的只读绑定](SETTINGS-BINDING.md)，第三十九轮已有[表/名称资源与只读输入清单](IMPORT-MATERIALS.md)，真实程序/BK4/资源正例、完整事务、BK4 兼容/角色与新鲜来源证明、机身绑定 worker 和 Mac USB/全局锁仍缺；第三十五轮已完成[固定来源规则及真实 C 的合成头构建/报告 ABI](WORKER-CONTRACTS.md)，Sony 加载边界仍未验证。第三十四轮已增加[合成持久化日志及进程锁原型](CUSTOM-JOURNAL.md)，不能替代设备事务或恢复。[总计划](../plan.md)和[交接](../research/HANDOFF.md)记录下一轮顺序；旧 FL23 安装器、运行锁、默认单份备份不变。
 
 新 Custom 流程的两份独立物理介质完整备份尚无实证，Docker/惠普电脑也没有实测需求。真机写入、恢复、冷启动和真实色彩仍在 N4，进入前提示；当前无需连接相机。
 
