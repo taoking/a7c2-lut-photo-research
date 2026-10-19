@@ -1,0 +1,23 @@
+{
+  "upstream": "https://github.com/QAQLeonard/a7c2-fl23-research",
+  "author": "QAQLeonard / A7C II FL2/FL3 preview contributors",
+  "commit": "7e54d60b458847f1befa6cfd614fbf004b8b0b90",
+  "source_directory": "src/looks/looktool",
+  "license": "MIT; see LICENSE.txt",
+  "files": {
+    "native.py": {
+      "sha256": "e41989f32177c5497615ee469d03b4e436ac7644e333fbd8018891928729d73b",
+      "bytes": 5631
+    },
+    "color.py": {
+      "sha256": "9e10acd650113739a12d93c5e6095aca56f3f4a214005a73169227db221df32d",
+      "bytes": 2021
+    },
+    "calibration.py": {
+      "sha256": "5ecc4e5c15a19e03606bc8d016e50e7fab60f8e2b20d0c8094793539b7910fac",
+      "bytes": 4484
+    }
+  },
+  "modifications": false,
+  "device_modules_included": false
+}

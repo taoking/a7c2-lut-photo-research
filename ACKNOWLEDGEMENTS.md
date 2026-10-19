@@ -6,7 +6,9 @@
 
 ## 主要上游：QAQLeonard/a7c2-fl23-research
 
-本项目直接依赖 [QAQLeonard/a7c2-fl23-research](https://github.com/QAQLeonard/a7c2-fl23-research)，固定提交 [`dd01c07a2a5df004d709595a43ebafe81bbd8fae`](https://github.com/QAQLeonard/a7c2-fl23-research/tree/dd01c07a2a5df004d709595a43ebafe81bbd8fae)。感谢原作者公开研究结果、源代码和验证边界。
+本项目直接依赖 [QAQLeonard/a7c2-fl23-research](https://github.com/QAQLeonard/a7c2-fl23-research)，固定提交 [`dd01c07a2a5df004d709595a43ebafe81bbd8fae`](https://github.com/QAQLeonard/a7c2-fl23-research/tree/dd01c07a2a5df004d709595a43ebafe81bbd8fae)。感谢原作者公开研究结果、源代码和验证边界。 原安装器继续使用该固定版本；新增原生拟合方向另行审计 [v2.1 提交 7e54d60b…](https://github.com/QAQLeonard/a7c2-fl23-research/tree/7e54d60b458847f1befa6cfd614fbf004b8b0b90)，上游 looktool 算法、原生表研究和设备流程均归原作者，见[审计与复用边界](docs/UPSTREAM-V2.1-AUDIT.md)。
+
+N2 离线工具原样接入该 v2.1 的 `native.py`、`color.py` 与 `calibration.py`，表编码/预测、平滑约束拟合、基础颜色函数及配对逆 ST 标定归上游作者；本仓库新增有界输入接入、来源保护、照片/掩码比较及误差报告。三个源文件、完整哈希和 MIT 许可见[固定算法目录](lutphoto/_vendor/sonylooks/README.md)。没有接入上游设备模块或固件资产。
 
 上游贡献包括：A7C II 2.01 的补丁位置与前后完整哈希、FL2/FL3 色彩数据和映射、原生安装/恢复模块、机内诊断、WBI 处理、运行状态读取、参数保留验证，以及原安装器。**这些研究与实现不属于本项目新成果。**
 

@@ -1,6 +1,6 @@
 # A7C II LUT 照片研究与 macOS 工具
 
-本仓库提供独立的机外 LUT 参考工具、只读固件调查代码和研究交接。**机内 LUT 照片直出尚未实现，没有可供安装的照片 LUT 补丁。** 从[研究说明](research/README.md)、[总计划](plan.md)和[当前交接](research/HANDOFF.md)开始查看。公开内容与发布边界见[发布说明](docs/PUBLISHING.md)。
+本仓库提供机外 LUT 参考工具、[原生 Creative Look 离线拟合与预测](docs/NATIVE-FIT-OFFLINE.md)和只读固件研究。**本仓库尚未集成机内自定义外观导入，任意 3D LUT 照片直出也未实现。** 近期主线调整见[v2.1 审计与接入计划](docs/UPSTREAM-V2.1-AUDIT.md)。 从[研究说明](research/README.md)、[总计划](plan.md)和[当前交接](research/HANDOFF.md)开始查看。公开内容与发布边界见[发布说明](docs/PUBLISHING.md)。
 
 仓库继承 [MDHan/a7c2-fl23-macos](https://github.com/MDHan/a7c2-fl23-macos) 的 macOS FL2/FL3 适配代码与历史；下方保留其安装说明和验证来源，不能将这些证据视为新 LUT 功能的实机验证。
 
@@ -26,7 +26,7 @@
 
 ## LUT 照片开发进度
 
-已提供独立的 [离线 LUT 参考工具](research/README.md)：检查 CUBE、对 sRGB 照片套 LUT 并另存、生成诊断素材，以及只读固件调查。它用于建立未来机内实现的对照，**目前尚未实现机内照片 LUT 直出**。研究依赖与原安装器分开，普通 FL2/FL3 安装无需安装这些依赖。总状态见[里程碑表](plan.md)，继续任务先读[当前交接](research/HANDOFF.md)。最新的配置条件差异与 MAIN 前置缓冲关系见[第二十六轮记录](research/LUT链路调查记录-第二十六轮.md)，历史和文档维护方式见[研究说明](research/README.md)。实际捕获句柄身份、有效像素传输、照片使能及到主图的完整路径仍待验证。相机实测后置，进入前提示，目前无需连接相机。
+已提供独立的[离线 LUT 参考工具](research/README.md)。按最新要求，近期优先吸收上游 v2.1 的原生 Creative Look 拟合路线；[第二十九轮](research/LUT链路调查记录-第二十九轮.md)已完成固定源码审计，[第三十轮](research/LUT链路调查记录-第三十轮.md)已接入 CUBE→原生修正表、ST/桥接契约、参考预测和显式区域误差；[第三十一轮](research/LUT链路调查记录-第三十一轮.md)补齐配对标定、拟合前冻结和多场景分区验收，见[使用说明](docs/NATIVE-VALIDATION.md)。N2 离线工具链已具备，真实 ST 数据和相机精度仍待 N4 验证，下一步为 N3 独立 Mac 适配。上游已有单台 Windows 机身的更新报告，不能作为本地 Mac 安装或真实色彩精度验证。任意 3D LUT 的 M2–M4 保留为研究支线，其运行配置、有效传输、句柄/MAIN 身份和时序仍未闭合。总状态见[里程碑表](plan.md)，继续任务读[当前交接](research/HANDOFF.md)。旧 FL2/FL3 锁和安装器保持原样；相机实测后置，进入前提示，目前无需连接相机。
 
 ## 先确认设备和版本
 
