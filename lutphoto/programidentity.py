@@ -59,6 +59,21 @@ class _Policy:
     version: int = 0x10006
 
 
+@dataclass(frozen=True)
+class _Field:
+    slot: int
+    key: int
+    size: int
+    reference: int | None
+
+
+@dataclass(frozen=True)
+class _Bindings:
+    slots: tuple
+    fields: tuple
+    references: tuple
+
+
 def _load_policy(archive):
     pin, sources = w.load_sources(archive)
     checked = w.catalog(sources)
@@ -177,7 +192,7 @@ def _identify(ap, cp, policy):
             'AP_sha256': ap_sha, 'CP_sha256': cp_sha}
 
 
-def _descriptors(ap, slots, policy):
+def _descriptor_bindings(ap, slots, policy):
     if (not isinstance(slots, (tuple, list)) or not slots
             or any(type(s) is not int or s not in range(1, 7) for s in slots) or len(set(slots)) != len(slots)):
         raise ValueError('Select distinct slots 1..6')
@@ -194,14 +209,23 @@ def _descriptors(ap, slots, policy):
     selected = []
     for slot in sorted(slots):
         selector = slot + 9
-        selected.append(descriptor(0x14ea + selector, base=True))
-        selected.extend(descriptor(0x1520 + i * 18 + selector) for i in range(8))
-    if len(set(references)) != 8 or len(set(selected)) != len(selected) or set(selected) & set(references):
+        selected.append(_Field(slot, descriptor(0x14ea + selector, base=True), 1, None))
+        selected.extend(_Field(slot, descriptor(0x1520 + i * 18 + selector), 4, references[i]) for i in range(8))
+    keys = [f.key for f in selected]
+    if len(set(references)) != 8 or len(set(keys)) != len(keys) or set(keys) & set(references):
         raise ValueError('Aliased selected or ST descriptor keys')
-    return {'selected_slots': sorted(slots), 'selected_fields': len(selected),
-            'ST_reference_fields': 8, 'unique_rows_checked': len(selected) + 8,
+    return _Bindings(tuple(sorted(slots)), tuple(selected), references)
+
+
+def _descriptor_summary(bindings):
+    return {'selected_slots': list(bindings.slots), 'selected_fields': len(bindings.fields),
+            'ST_reference_fields': len(bindings.references), 'unique_rows_checked': len(bindings.fields) + len(bindings.references),
             'row_shape_verified': True, 'setting_values_verified': False,
             'live_descriptors_verified': False, 'write_plan_enabled': False}
+
+
+def _descriptors(ap, slots, policy):
+    return _descriptor_summary(_descriptor_bindings(ap, slots, policy))
 
 
 def _boundary():

@@ -26,7 +26,7 @@
 
 ## LUT 照片开发进度
 
-已提供独立的[机外 LUT 参考工具](research/README.md)。近期主线是上游 v2.1 的原生 Creative Look 拟合：[N1 固定源码审计](docs/UPSTREAM-V2.1-AUDIT.md)完成，N2 的[拟合/预测](docs/NATIVE-FIT-OFFLINE.md)及[配对标定/冻结验收](docs/NATIVE-VALIDATION.md)离线工具已具备，真实 ST 与相机精度仍待 N4 验证。N3 已有来源/ABI、资源/设置、日志/进程锁和 BK4 离线检查；第三十七轮新增[完整 AP/CP 身份及描述符只读入口](docs/PROGRAM-IDENTITY.md)，只用自制程序验证正例，尚无真实程序兼容证据，也未接入写入、恢复或 USB/全局相机锁。
+已提供独立的[机外 LUT 参考工具](research/README.md)。近期主线是上游 v2.1 的原生 Creative Look 拟合：[N1 固定源码审计](docs/UPSTREAM-V2.1-AUDIT.md)完成，N2 的[拟合/预测](docs/NATIVE-FIT-OFFLINE.md)及[配对标定/冻结验收](docs/NATIVE-VALIDATION.md)离线工具已具备，真实 ST 与相机精度仍待 N4 验证。N3 已有来源/ABI、资源/设置、日志/进程锁和 BK4 离线检查；第三十七轮新增[完整 AP/CP 身份及描述符入口](docs/PROGRAM-IDENTITY.md)，第三十八轮接通[描述符与 RAM/保存快照的只读绑定](docs/SETTINGS-BINDING.md)。正例仅使用自制材料，真实程序/BK4 兼容、新鲜同机身来源及资产事务绑定仍缺，尚未接入写入、恢复或 USB/全局相机锁。
 
 任意 3D LUT 的 M2–M4 保留为研究支线，运行配置、有效传输、句柄/MAIN 身份和时序仍未闭合。旧 FL2/FL3 锁和安装器保持原样；相机实测后置，进入前提示，目前无需连接相机。总状态见[里程碑表](plan.md)，继续任务读[当前交接](research/HANDOFF.md)，历史成果见[轮次索引](research/ROUNDS.md)。
 

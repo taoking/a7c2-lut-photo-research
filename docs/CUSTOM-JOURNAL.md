@@ -73,4 +73,4 @@ SHA 链不是认证签名，没有外部可信尾锚，不能抵抗拥有本地�
 
 故障 `COMPONENT:stage` 的组件只能是实际变化的 AP/CP/NAMES/SETTINGS_RAM/SETTINGS_SAVED；阶段为 `before-intent`、`intent-temporary`、`intent-published`、`after-intent`、`state-temporary`、`state-published`、`partial-write`、`after-write`、`verified-temporary`、`verified-published`、`after-verified`。最终阶段使用 `TRANSACTION:before-complete/complete-temporary/complete-published`。临时/发布阶段中断可能使证据本身不完整；不把这类报告判为合法结果。
 
-第三十五轮完成[来源策略与真实 C 的合成头编译/ABI 核验](WORKER-CONTRACTS.md)，第三十六轮增加[BK4 只读格式/四态比较并厘清主机加载链边界](BK4-OFFLINE.md)。第三十七轮已有[程序身份/描述符只读入口](PROGRAM-IDENTITY.md)，真实程序正例、设置/事务绑定、备份兼容性、角色/机身来源证明、真实 Mac USB/全局锁、独立介质及物理恢复仍缺；Sony 加载行为留给受控 N4。N3 保持部分完成，N4 相机实测后置、进入前提示。当前进度见[总计划](../plan.md)与[交接](../research/HANDOFF.md)。
+第三十五轮完成[来源策略与真实 C 的合成头编译/ABI 核验](WORKER-CONTRACTS.md)，第三十六轮增加[BK4 只读格式/四态比较并厘清主机加载链边界](BK4-OFFLINE.md)。第三十七轮已有[程序身份/描述符只读入口](PROGRAM-IDENTITY.md)，第三十八轮已有[描述符/快照只读绑定](SETTINGS-BINDING.md)，真实程序/BK4 正例、资产/事务绑定、备份兼容性、新鲜角色/机身来源证明、真实 Mac USB/全局锁、独立介质及物理恢复仍缺；Sony 加载行为留给受控 N4。N3 保持部分完成，N4 相机实测后置、进入前提示。当前进度见[总计划](../plan.md)与[交接](../research/HANDOFF.md)。
