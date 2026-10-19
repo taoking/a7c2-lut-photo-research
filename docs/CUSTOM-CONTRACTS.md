@@ -60,6 +60,6 @@ mkdir -p research/output/contracts-demo
 
 ## 剩余工作
 
-N3 仍为部分完成：真实 `device_layout/six` 来源、描述符与表资产绑定、完整 BK4 解析/来源证明、真实 worker 构建及报告 ABI、持久化意图/结果和共享会话锁、Mac USB 生命周期尚待接入/审阅。[总计划](../plan.md)和[交接](../research/HANDOFF.md)记录下一轮顺序；旧 FL23 安装器、运行锁、默认单份备份不变。
+N3 仍为部分完成：真实 `device_layout/six` 来源、描述符与表资产绑定、完整 BK4 解析/来源证明、真实 worker 构建及报告 ABI、Mac USB/全局锁尚待接入/审阅。第三十四轮已增加[合成持久化日志及进程锁原型](CUSTOM-JOURNAL.md)，不能替代设备事务或恢复。[总计划](../plan.md)和[交接](../research/HANDOFF.md)记录下一轮顺序；旧 FL23 安装器、运行锁、默认单份备份不变。
 
 新 Custom 流程的两份独立物理介质完整备份尚无实证，Docker/惠普电脑也没有实测需求。真机写入、恢复、冷启动和真实色彩仍在 N4，进入前提示；当前无需连接相机。
