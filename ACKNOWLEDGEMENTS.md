@@ -29,4 +29,6 @@ USB 服务协议来自 [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-R
 
 本项目与上述作者及 Sony 无官方合作或背书关系。
 
-N3 编译探针与合成事务参考上游固定 v2.1 的 `nativebuild.py`、`device_layout.py`、`devicejob.py` 及资源/设置保护边界；使用其要求的 Zig 0.13.0 进行中性代码验证，没有复制或运行设备模块、固件资产或私人事务清单。真实机内布局及保护研究继续归原作者，本项目合成模型不替代这些验证。
+第三十二轮 N3 编译探针与合成事务参考上游固定 v2.1 的 `nativebuild.py`、`device_layout.py`、`devicejob.py` 及资源/设置保护边界；使用其要求的 Zig 0.13.0 进行中性代码验证，没有复制或运行设备执行模块、固件资产或私人事务清单。真实机内布局及保护研究继续归原作者，本项目合成模型不替代这些验证。
+
+第三十三轮在独立的 `lutphoto/_vendor/sonycontracts` 原字节保留上游 `resources.py`、`devicesettings.py` 与 68 个资源文件名清单，来源哈希、路径及完整 MIT 许可见[来源记录](lutphoto/_vendor/sonycontracts/README.md)。只使用资源内存改名/逆向和设置比较保护；没有 Sony UXC 内容、真实 AP 识别/描述符适配器或 USB 执行。新增的边界检查、合成格式夹具与命令行见[N3 离线契约](docs/CUSTOM-CONTRACTS.md)。

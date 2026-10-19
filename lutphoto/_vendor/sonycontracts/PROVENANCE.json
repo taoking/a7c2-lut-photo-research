@@ -1,0 +1,34 @@
+{
+  "upstream": "https://github.com/QAQLeonard/a7c2-fl23-research",
+  "author": "QAQLeonard / A7C II FL2/FL3 preview contributors",
+  "commit": "7e54d60b458847f1befa6cfd614fbf004b8b0b90",
+  "archive_sha256": "8c6c30448219f4e865e8005d2ffa789248e984d73b0f9342035f7065a1a232f7",
+  "license": "MIT; see LICENSE.txt",
+  "files": {
+    "resources.py": {
+      "source": "src/looks/looktool/resources.py",
+      "bytes": 4044,
+      "sha256": "5a49691c8dc6875f5a55104601a981f78d28492999e5128f0fd7ab3bf61f03d1"
+    },
+    "devicesettings.py": {
+      "source": "src/looks/looktool/devicesettings.py",
+      "bytes": 3993,
+      "sha256": "47e0f76db65366b8fb7059319410c665951239a76e2d892dfda83daa6c4247b5"
+    },
+    "resource-files.json": {
+      "source": "src/looks/assets/resource-files.json",
+      "bytes": 2395,
+      "sha256": "dd7a5fa20a1da6d5015781610754215543a53fbf04e3fc7aa41d52ce11712d61"
+    },
+    "LICENSE.txt": {
+      "source": "LICENSE",
+      "bytes": 1234,
+      "sha256": "c592870a8504689cbe03449c2ae582ba6517716c9e0cd2f880cea50c187d16e9"
+    }
+  },
+  "modifications": false,
+  "camera_execution_modules_included": false,
+  "excluded_entrypoints": [
+    "devicesettings.plan (requires unbundled device_layout and verified AP descriptors)"
+  ]
+}
