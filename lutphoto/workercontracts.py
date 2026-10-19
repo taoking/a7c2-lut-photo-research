@@ -42,10 +42,11 @@ def boundary():
             'physical_validation_verified': False}
 
 
-def load_sources(archive):
-    pin = json.loads(PIN.read_text())
+def load_sources(archive, *, inventory=None):
+    pin = json.loads((PIN if inventory is None else Path(inventory)).read_text())
+    schema = 'a7c2-worker-source-audit/1' if inventory is None else 'a7c2-backup-loader-source-audit/1'
     baseline = (ROOT / 'upstream.lock.json').read_bytes()
-    if (pin['schema'] != 'a7c2-worker-source-audit/1' or pin['camera_integration_enabled'] is not False
+    if (pin['schema'] != schema or pin['camera_integration_enabled'] is not False
             or sha(baseline) != pin['baseline_lock_sha256']):
         raise ValueError('Source pin or original installer lock differs')
     old = json.loads((ROOT / 'research/upstream-looktool.lock.json').read_text())

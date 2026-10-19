@@ -1,0 +1,63 @@
+{
+  "schema": "a7c2-backup-loader-source-audit/1",
+  "purpose": "offline host-loader boundary and BK4 format audit only; not an installer dependency",
+  "repository": "https://github.com/QAQLeonard/a7c2-fl23-research",
+  "tag": "v2.1",
+  "commit": "7e54d60b458847f1befa6cfd614fbf004b8b0b90",
+  "archive_bytes": 331887,
+  "archive_sha256": "8c6c30448219f4e865e8005d2ffa789248e984d73b0f9342035f7065a1a232f7",
+  "baseline_lock_sha256": "8e5467b6f853918fb6d90b8589fc7b2b21466848531a13b1c634ab4bd9429e71",
+  "camera_integration_enabled": false,
+  "files": {
+    "LICENSE": {
+      "bytes": 1234,
+      "sha256": "c592870a8504689cbe03449c2ae582ba6517716c9e0cd2f880cea50c187d16e9",
+      "git_blob_sha1": "2b7e2d9e9a4220a6839d81737d4b4bb00689120a"
+    },
+    "src/looks/looktool/devicesession.py": {
+      "bytes": 8754,
+      "sha256": "2542e7c763de1ab435cebefd5595695afd8efff46ab1559a748e088312ab503d",
+      "git_blob_sha1": "06701867eb79d41af0557911d9362cfbca541994"
+    },
+    "src/looks/looktool/usbidentity.py": {
+      "bytes": 1008,
+      "sha256": "0b0bcd71df74cea68ff999d0d91f715c71ab53e5f9658fecbcaa0601186101a5",
+      "git_blob_sha1": "1fa44124cf6128531fb178df1a9eb0ea246d46b3"
+    },
+    "src/looks/looktool/usbservice.py": {
+      "bytes": 2456,
+      "sha256": "dc2cdd93ece42ce7049894e2148969615cdaf8d232d99661cc6f3f7372f1bdb5",
+      "git_blob_sha1": "0cfc4a2b02cb1f04234823c3c64ae3c8c6daae8a"
+    },
+    "src/fl23/transport.py": {
+      "bytes": 10864,
+      "sha256": "a578ebfd0cffa0f715ec025ef7e661d239652ae8573cea3982a27c8c08f06ccb",
+      "git_blob_sha1": "41ad3678262d335355abe19f5897269cfad08109"
+    },
+    "src/fl23/core.py": {
+      "bytes": 8774,
+      "sha256": "efa0896f0fd18c62d165d64f0cb4ffb4852ae1d2ca4b7c24e6d53331e7eb7b52",
+      "git_blob_sha1": "62149d92bd957d55bf7240f240f9a31f70023d7e"
+    },
+    "src/fl23/vendor/pmca/backup/__init__.py": {
+      "bytes": 5756,
+      "sha256": "ea09b9650ecd306e5dd4a6c7f1b57dd4b5763c0aa2e5d8509a364bdf7deeba61",
+      "git_blob_sha1": "97357364d0961023d0028bf3386b7458da1813b9"
+    },
+    "src/fl23/vendor/pmca/util/__init__.py": {
+      "bytes": 1485,
+      "sha256": "1bf318b75faf450011123ce430becc87aec8a7a161765afe38c498cdd20cbacf",
+      "git_blob_sha1": "b2ee7d939661150ebb4c0c15f2b8a6eb0d96847e"
+    },
+    "src/fl23/vendor/pmca/usb/sony.py": {
+      "bytes": 36033,
+      "sha256": "53ffb4d9d49cb5146623fda2b66ecb137681a6fc9ab0c98d23a51e75128af97e",
+      "git_blob_sha1": "9e597375eb645cc498645fbf5c483a9f1c1d77a1"
+    },
+    "src/fl23/licenses/Sony-PMCA-RE-MIT.txt": {
+      "bytes": 1072,
+      "sha256": "a485f27d0b22eb7fd9b9419795695d0a1750ea32c961d11c1dd8ddade564dedf",
+      "git_blob_sha1": "77b0378407be242b5537f8dca3ed6402c91ba676"
+    }
+  }
+}

@@ -26,7 +26,7 @@
 
 ## LUT 照片开发进度
 
-已提供独立的[离线 LUT 参考工具](research/README.md)。按最新要求，近期优先吸收上游 v2.1 的原生 Creative Look 拟合路线；[第二十九轮](research/LUT链路调查记录-第二十九轮.md)已完成固定源码审计，[第三十轮](research/LUT链路调查记录-第三十轮.md)已接入 CUBE→原生修正表、ST/桥接契约、参考预测和显式区域误差；[第三十一轮](research/LUT链路调查记录-第三十一轮.md)补齐配对标定、拟合前冻结和多场景分区验收，见[使用说明](docs/NATIVE-VALIDATION.md)。N2 离线工具链已具备，真实 ST 数据和相机精度仍待 N4 验证，[第三十二轮](research/LUT链路调查记录-第三十二轮.md)开始 N3，完成[Mac 编译探针与合成事务基础](docs/CUSTOM-MAC-OFFLINE.md)；第三十三轮补充[资源/设置离线契约](docs/CUSTOM-CONTRACTS.md)，覆盖 68 文件、槽位映射、逐字节逆向及设置保护的合成格式测试；第三十四轮增加[合成事务持久化日志、进程锁和中断只读分类](docs/CUSTOM-JOURNAL.md)；第三十五轮完成[固定来源规则与两份真实 C 源码的合成头编译/ABI 检查](docs/WORKER-CONTRACTS.md)；真实身份/描述符接入、设备恢复及 USB/全局相机锁仍未实现。上游已有单台 Windows 机身的更新报告，不能作为本地 Mac 安装或真实色彩精度验证。任意 3D LUT 的 M2–M4 保留为研究支线，其运行配置、有效传输、句柄/MAIN 身份和时序仍未闭合。总状态见[里程碑表](plan.md)，继续任务读[当前交接](research/HANDOFF.md)。旧 FL2/FL3 锁和安装器保持原样；相机实测后置，进入前提示，目前无需连接相机。
+已提供独立的[离线 LUT 参考工具](research/README.md)。按最新要求，近期优先吸收上游 v2.1 的原生 Creative Look 拟合路线；[第二十九轮](research/LUT链路调查记录-第二十九轮.md)已完成固定源码审计，[第三十轮](research/LUT链路调查记录-第三十轮.md)已接入 CUBE→原生修正表、ST/桥接契约、参考预测和显式区域误差；[第三十一轮](research/LUT链路调查记录-第三十一轮.md)补齐配对标定、拟合前冻结和多场景分区验收，见[使用说明](docs/NATIVE-VALIDATION.md)。N2 离线工具链已具备，真实 ST 数据和相机精度仍待 N4 验证，[第三十二轮](research/LUT链路调查记录-第三十二轮.md)开始 N3，完成[Mac 编译探针与合成事务基础](docs/CUSTOM-MAC-OFFLINE.md)；第三十三轮补充[资源/设置离线契约](docs/CUSTOM-CONTRACTS.md)，覆盖 68 文件、槽位映射、逐字节逆向及设置保护的合成格式测试；第三十四轮增加[合成事务持久化日志、进程锁和中断只读分类](docs/CUSTOM-JOURNAL.md)；第三十五轮完成[固定来源规则与两份真实 C 源码的合成头编译/ABI 检查](docs/WORKER-CONTRACTS.md)；第三十六轮接入[BK4 只读格式解析/设置比较并厘清主机加载链边界](docs/BK4-OFFLINE.md)；真实身份/描述符、机身关联、设备恢复及 USB/全局相机锁仍未实现。上游已有单台 Windows 机身的更新报告，不能作为本地 Mac 安装或真实色彩精度验证。任意 3D LUT 的 M2–M4 保留为研究支线，其运行配置、有效传输、句柄/MAIN 身份和时序仍未闭合。总状态见[里程碑表](plan.md)，继续任务读[当前交接](research/HANDOFF.md)。旧 FL2/FL3 锁和安装器保持原样；相机实测后置，进入前提示，目前无需连接相机。
 
 ## 先确认设备和版本
 

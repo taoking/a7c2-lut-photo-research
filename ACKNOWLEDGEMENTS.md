@@ -36,3 +36,5 @@ USB 服务协议来自 [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-R
 第三十四轮对照固定上游 `devicejob.py`、`devicelock.py` 及继承的 Mac 全局锁审阅持久化/独占边界，新增独立的合成磁盘日志与只读分类原型；没有复制或运行上游设备执行模块，没有将临时目录的进程锁称为真实相机锁已接通。
 
 第三十五轮通过[独立 14 成员清单](research/upstream-worker.lock.json)固定上游布局、设置、构建、报告与 C 来源；只在临时目录原字节包含上游 C，以自制头编译并附加 ABI 静态断言，完整包许可也纳入固定清单，不分发生成模块或固件衍生资产。源码、保护策略及报告设计归原作者；新增审计入口、严格字节校验和 ELF 范围检查见[说明](docs/WORKER-CONTRACTS.md)。
+
+第三十六轮的新只读 BK4 解析器依据 ma1co/Sony-PMCA-RE 的格式设计，经 QAQLeonard 固定包核对，未引入 setter 或 USB 模块。保留[ma1co 完整 MIT 许可](docs/Sony-PMCA-RE-MIT.txt)及[10 成员来源清单](research/upstream-backup-loader.lock.json)；额外边界限制、reset/布局比较、显式未验证角色及加载链审阅见[BK4 说明](docs/BK4-OFFLINE.md)。
