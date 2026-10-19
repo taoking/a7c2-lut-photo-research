@@ -7,7 +7,7 @@
 ## 用户复制的任务
 
 ```text
-请使用 https://github.com/MDHan/a7c2-fl23-macos 帮我安装 FL2/FL3。
+请使用 https://github.com/taoking/a7c2-lut-photo-research 中继承的 Mac 安装工具帮我安装 FL2/FL3。
 先阅读 README.md、AGENTS.md、docs/AI-INSTALL.md 和 docs/VALIDATION.md。
 我了解实验风险，授权完成本机环境准备、单份备份、预检查、安装、验证。
 请先检查已有安装和工作目录，已安装就只验证。能自动做的直接做。

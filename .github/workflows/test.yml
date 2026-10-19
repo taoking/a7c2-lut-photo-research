@@ -15,3 +15,5 @@ jobs:
       - run: python -B -m macfl23 check
       - run: python -B -m unittest discover -s tests -v
       - run: python -B -m unittest discover -s .upstream/a7c2_fl23_preview/tests -v
+      - run: python -m pip install -r requirements-lut.txt -r requirements-firmware.txt
+      - run: python -B -m unittest discover -s research/tests -v

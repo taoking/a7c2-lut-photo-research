@@ -1,6 +1,6 @@
 # 来源与授权说明
 
-新 Mac 适配代码采用 MIT 许可证，见 [LICENSE](LICENSE)。其中改编自上游的代码保留 `Copyright (c) 2026 A7C II FL2/FL3 preview contributors`，上游完整许可证见 [docs/UPSTREAM-LICENSE.txt](docs/UPSTREAM-LICENSE.txt)。
+Mac 适配及新编写的机外 LUT、只读研究软件代码采用 MIT 许可证，见 [LICENSE](LICENSE)。其中改编自上游的代码保留 `Copyright (c) 2026 A7C II FL2/FL3 preview contributors`，上游完整许可证见 [docs/UPSTREAM-LICENSE.txt](docs/UPSTREAM-LICENSE.txt)。
 
 上游项目、协议库和研究参考见 [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md)。固定下载包由 `upstream.lock.json` 的提交、ZIP 哈希及逐文件哈希约束。下载后的原始 LICENSE、NOTICE、第三方许可全部保留。
 

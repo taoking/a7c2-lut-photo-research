@@ -1,5 +1,7 @@
 # 验证记录与边界
 
+本页保留来源仓库 [MDHan/a7c2-fl23-macos](https://github.com/MDHan/a7c2-fl23-macos) 的固定提交与前身脚本验证记录，不代表新增 LUT 研究已通过相机验证。机内 LUT 照片直出尚未实现；当前研究验证见 [轮次记录](../research/ROUNDS.md)。
+
 ## 实机证据来源
 
 2026-10-18，前身机身专用脚本在一台 Sony ILCE-7CM2、原版 2.01 和 MacBook Air M4 上完成：

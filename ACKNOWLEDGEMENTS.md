@@ -1,5 +1,9 @@
 # 致谢与贡献边界
 
+## macOS 适配来源：MDHan/a7c2-fl23-macos
+
+本研究仓库继承 [MDHan/a7c2-fl23-macos](https://github.com/MDHan/a7c2-fl23-macos) 的 macOS 适配、测试、文档及提交历史，研究起点为提交 `5babef40bba986efdd0573380c0ff9f8a027495c`。原有版权和 MIT 声明保留；新增机外 LUT 工具与只读研究不改变原作者的贡献归属，也不扩大已有实机验证范围。
+
 ## 主要上游：QAQLeonard/a7c2-fl23-research
 
 本项目直接依赖 [QAQLeonard/a7c2-fl23-research](https://github.com/QAQLeonard/a7c2-fl23-research)，固定提交 [`dd01c07a2a5df004d709595a43ebafe81bbd8fae`](https://github.com/QAQLeonard/a7c2-fl23-research/tree/dd01c07a2a5df004d709595a43ebafe81bbd8fae)。感谢原作者公开研究结果、源代码和验证边界。

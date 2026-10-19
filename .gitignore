@@ -19,3 +19,5 @@ state.json
 *.so
 *.zip
 *-report.json
+research/materials/
+research/output/

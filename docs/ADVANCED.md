@@ -31,8 +31,8 @@
 需要 macOS、Python **3.10+**、可传数据的 USB 线、充足电量。只测试过前述 Apple Silicon 环境；其他 Mac 不视为已验证。
 
 ```sh
-git clone https://github.com/MDHan/a7c2-fl23-macos.git
-cd a7c2-fl23-macos
+git clone https://github.com/taoking/a7c2-lut-photo-research.git
+cd a7c2-lut-photo-research
 ./setup.sh
 ./a7c2-mac check
 ```

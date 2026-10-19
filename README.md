@@ -1,4 +1,8 @@
-# Mac 给 A7C2 安装 FL2 / FL3
+# A7C II LUT 照片研究与 macOS 工具
+
+本仓库提供独立的机外 LUT 参考工具、只读固件调查代码和研究交接。**机内 LUT 照片直出尚未实现，没有可供安装的照片 LUT 补丁。** 从[研究说明](research/README.md)、[总计划](plan.md)和[当前交接](research/HANDOFF.md)开始查看。公开内容与发布边界见[发布说明](docs/PUBLISHING.md)。
+
+仓库继承 [MDHan/a7c2-fl23-macos](https://github.com/MDHan/a7c2-fl23-macos) 的 macOS FL2/FL3 适配代码与历史；下方保留其安装说明和验证来源，不能将这些证据视为新 LUT 功能的实机验证。
 
 本项目直接基于 **[QAQLeonard/a7c2-fl23-research](https://github.com/QAQLeonard/a7c2-fl23-research)**（QAQLeonard／小红书「QAQLeonard（读研版）」）进行 Mac 适配。感谢原作者开放 A7C II 的补丁研究、机内工具和验证记录。
 
@@ -16,9 +20,13 @@
 
 我们的新增工作是 macOS USB 接管、流程与错误处理、备份核验及简明/AI安装教程。上述移植研究与基础工具的贡献归各原作者；固定提交、许可和完整致谢见 [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md)。
 
-> **先看这一句：这是实验性相机改装，有无法正常开机的风险，备份不保证能救砖。** 前身脚本已在一台机身完成安装，本仓库的 `verify` 已实机通过；本仓库通用版的首次备份、安装和恢复仍未实机测试。[查看验证范围](docs/VALIDATION.md)
+> **相机安装工具：这是实验性相机改装，有无法正常开机的风险，备份不保证能救砖。** 继承的 Mac 适配工具已有固定提交的 `verify` 实机记录；其通用版首次备份、安装和恢复仍未实机测试。[查看验证来源与范围](docs/VALIDATION.md)
 
 > **已知安装中断问题：** [Issue #2](https://github.com/MDHan/a7c2-fl23-macos/issues/2) 报告在 `writing_settings` 因 `0x02770015` 变化停止。此时程序可能已经写入，但收尾未完成，不能直接重装。专项 `diagnose` 仅经过离线测试、尚未真机验证；它会进入服务模式并运行临时模块，仍存在设备操作风险。请先阅读 [适用条件、风险和诊断方法](docs/INTERRUPTED-INSTALL.md)，再自行决定是否运行。
+
+## LUT 照片开发进度
+
+已提供独立的 [离线 LUT 参考工具](research/README.md)：检查 CUBE、对 sRGB 照片套 LUT 并另存、生成诊断素材，以及只读固件调查。它用于建立未来机内实现的对照，**目前尚未实现机内照片 LUT 直出**。研究依赖与原安装器分开，普通 FL2/FL3 安装无需安装这些依赖。总状态见[里程碑表](plan.md)，继续任务先读[当前交接](research/HANDOFF.md)。最新的配置条件差异与 MAIN 前置缓冲关系见[第二十六轮记录](research/LUT链路调查记录-第二十六轮.md)，历史和文档维护方式见[研究说明](research/README.md)。实际捕获句柄身份、有效像素传输、照片使能及到主图的完整路径仍待验证。相机实测后置，进入前提示，目前无需连接相机。
 
 ## 先确认设备和版本
 
@@ -43,7 +51,7 @@
 
 ```text
 请帮我使用这个项目，在我的 Mac 上给 Sony A7C II 安装 FL2/FL3：
-https://github.com/MDHan/a7c2-fl23-macos
+https://github.com/taoking/a7c2-lut-photo-research
 
 先阅读 README.md、AGENTS.md 和 docs/AI-INSTALL.md，检查设备、固件、
 Python 和已有安装状态；不满足支持条件就停止并说明。
@@ -71,8 +79,8 @@ Python 和已有安装状态；不满足支持条件就停止并说明。
 先输入 `python3 --version`，确认至少是 3.10。然后复制：
 
 ```sh
-git clone https://github.com/MDHan/a7c2-fl23-macos.git
-cd a7c2-fl23-macos
+git clone https://github.com/taoking/a7c2-lut-photo-research.git
+cd a7c2-lut-photo-research
 ./setup.sh
 ```
 
@@ -238,7 +246,7 @@ RESULT: verified_after_cold_start
 
 ## 报错了怎么办？
 
-出现 `STOPPED`、未知报错或 `needs_review` 时，**先停，不重复安装、不手改状态、不直接取电池**。保留工作目录和终端输出，先按下表对照处理。无法确定原因时，可在 [GitHub Issues](https://github.com/MDHan/a7c2-fl23-macos/issues) 提供相机固件版本、Mac/系统版本、执行的命令及脱敏后的报错文字；不要上传整个工作目录。下面几项是我们实际遇到过、或当前工具会明确区分的情况：
+出现 `STOPPED`、未知报错或 `needs_review` 时，**先停，不重复安装、不手改状态、不直接取电池**。保留工作目录和终端输出，先按下表对照处理。无法确定原因时，可在 [GitHub Issues](https://github.com/taoking/a7c2-lut-photo-research/issues) 提供相机固件版本、Mac/系统版本、执行的命令及脱敏后的报错文字；不要上传整个工作目录。下面几项是我们实际遇到过、或当前工具会明确区分的情况：
 
 | 看到什么 | 怎么理解、怎么处理 |
 | --- | --- |
