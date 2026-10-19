@@ -1,6 +1,6 @@
 # N3：固定来源规则与 worker ABI
 
-第三十五轮提供 `lutphoto.workercontracts`：从已固定的 v2.1 包读取源码，审计来源规则、请求/报告格式，并可在隔离环境中编译上游两份真实 C 源码。**编译头只含自制合成元数据，产物不绑定机身、不保留、不加载或执行。** 没有真实 AP/CP 识别入口、设置写入计划、USB 或安装命令。
+第三十五轮提供 `lutphoto.workercontracts`：从已固定的 v2.1 包读取源码，审计来源规则、请求/报告格式，并可在隔离环境中编译上游两份真实 C 源码。**编译头只含自制合成元数据，产物不绑定机身、不保留、不加载或执行。** 此模块没有 AP/CP 文件识别入口、设置写入计划、USB 或安装命令；第三十七轮另增[程序身份只读入口](PROGRAM-IDENTITY.md)，真实程序正例仍未验证。
 
 独立的[来源清单](../research/upstream-worker.lock.json)记录 14 个成员的原路径、长度、SHA-256/Git blob SHA-1，以及完整源码包 SHA；包含布局/设置/构建/报告 Python、runtime/文件名元数据、旧 core、两份 C、SHA 头、设备依赖和 LICENSE。清单与既有 v2.1 审计交叉核对，不改旧安装器锁，不复制固件内容或真实备份。来源仍为 QAQLeonard 的[固定提交](https://github.com/QAQLeonard/a7c2-fl23-research/tree/7e54d60b458847f1befa6cfd614fbf004b8b0b90)，代码/固件资料权利见[致谢](../ACKNOWLEDGEMENTS.md)与[NOTICE](../NOTICE.md)。
 
@@ -62,4 +62,4 @@ CP 代码身份归一化只清零文件 `[0x8008, 0x9c9a)` 的 24 字节校验�
 
 **文件≤64 KiB 不等于加载只需≤64 KiB 内存。** 这些 ELF 检查只约束文件声明，未证明 Sony 实际加载器怎样分配、清零 BSS、重定位、设权限和维护生命周期。`camera_loader_abi_verified` 与 `firmware_bound_worker_verified` 均固定 false。产物 SHA/源与断言 SHA 留在忽略的本地报告，不提供模块下载或相机加载命令。
 
-N3 仍部分完成。第三十六轮已增加[BK4 只读解析/设置比较及主机加载链边界审阅](BK4-OFFLINE.md)，Sony 加载行为与同机身关联仍未证明；后续准备真实 AP/CP 只读身份/描述符接入需要的完整资产清单，不自行搜索私人备份，不在缺资产时模拟身份。实际全局相机锁/USB、设备恢复、双独立介质备份与 N4 物理/色彩验收继续后置，进入前提示。进度见[总计划](../plan.md)、[交接](../research/HANDOFF.md)。
+N3 仍部分完成。第三十六轮已增加[BK4 只读解析/设置比较及主机加载链边界审阅](BK4-OFFLINE.md)，Sony 加载行为与同机身关联仍未证明；第三十七轮已有[完整程序身份/描述符只读入口及材料清单](PROGRAM-IDENTITY.md)，真实程序正例、设置值/表资产和事务仍未绑定，不自行搜索私人备份，不在缺资产时模拟身份。实际全局相机锁/USB、设备恢复、双独立介质备份与 N4 物理/色彩验收继续后置，进入前提示。进度见[总计划](../plan.md)、[交接](../research/HANDOFF.md)。
