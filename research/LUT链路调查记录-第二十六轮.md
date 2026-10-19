@@ -1,6 +1,6 @@
 # LUT 链路调查：阶段配置来源、MAIN 前置处理与公开发布
 
-日期：2026-10-19。状态：本轮进行中。接续[第二十五轮](LUT链路调查记录-第二十五轮.md)；总任务未完成，机内 LUT 照片直出尚未实现。
+日期：2026-10-19。状态：本轮已完成。接续[第二十五轮](LUT链路调查记录-第二十五轮.md)；总任务未完成，机内 LUT 照片直出尚未实现。
 
 ## 范围与进度
 
@@ -10,7 +10,7 @@
 - [x] 核对配置生产与 MAIN 前置处理的选定关系。
 - [x] 固化只读证据并完成代码与 CLI 离线验证。
 - [x] 更新记录、短交接与必要里程碑证据。
-- [ ] 检查公开文件、历史、署名和许可，新建公开 GitHub 仓库并推送、核对结果。
+- [x] 检查公开文件、历史、署名和许可，新建公开 GitHub 仓库并推送、核对结果。
 
 ## 新增证据
 
@@ -52,15 +52,16 @@
 - `.venv/bin/python -B -`（内联实际 CLI 审核）：stdout、临时 JSON 和保存报告逐字节一致；核对 23 行的选择条件分离、动态行位置、角色槽映射，四项顶层 true、二十五项 false。错误材料不创建输出、拒绝覆盖且旧输出不变、help 通过；第二十三至二十五轮报告复跑一致，原文件不变。CP 与旧计划归档 SHA-256 不变，退出码 0。
 
 - `.venv/bin/python -B -`（内联公开文件/文档审核）：122 个候选文本文件均不含所查私人路径、令牌、私钥或二进制；1 个 Python AST、46 个 Markdown 的 273 个本地链接及锚点、14 个当轮修改 Markdown 的空白/换行检查通过。来源/许可、克隆命令与目录、旧归档 SHA-256、12 行总计划、36 行交接及报告标志计数通过，退出码 0。
-- `git diff --check`、`git diff --exit-code -- macfl23 upstream.lock.json requirements.txt a7c2-mac setup.sh tests`：退出码均为 0。最终暂存树、提交和 GitHub 结果仍待核对。
+- `git diff --check`、`git diff --cached --check` 及受保护路径差异检查：退出码均为 0。提交前再次逐个读取暂存 blob，122 个文本文件的类型/大小/隐私/排除目录检查通过，许可、原安装器和固定资产保持原样。基线文档去除一行多余结尾空行，旧计划归档完整哈希不变。
+- `gh repo create` 新建公开仓库、`git push lut-photo HEAD:main` 推送成功；`gh api` 核对公开属性、默认分支 `main`、本地/远端提交一致、122 个 blob 路径清单完全相同，未包含忽略材料和输出目录。源码提交的 [GitHub Offline validation](https://github.com/taoking/a7c2-lut-photo-research/actions/runs/39226737532) 已实际完成且成功。
 
 未新增数学内核或重复实现的单元测试；原版指令/字段由实际 CLI 核对。未操作固件、USB 或相机。
 
 ## 公开发布
 
-用户明确授权新建公开仓库及推送。发布目标为 [taoking/a7c2-lut-photo-research](https://github.com/taoking/a7c2-lut-photo-research)，尚待创建和推送核对。已有 `origin` 继续指向来源仓库，不向其推送本次研究。
+已按用户明确授权新建并推送公开仓库 [taoking/a7c2-lut-photo-research](https://github.com/taoking/a7c2-lut-photo-research)。初始源码提交为 [`f13646f`](https://github.com/taoking/a7c2-lut-photo-research/commit/f13646fcd876ad1d597aa4b070e49b1dec508b6a)，后续文档提交记录发布结果。使用独立远端 `lut-photo`；已有 `origin` 继续指向来源仓库，没有向其推送本次研究。
 
-发布前已检查候选文本与 11 次既有提交中的 53 个历史 blob；未检出令牌/私钥，发现一处本机文档路径并替换为通用路径。保留 MDHan、QAQLeonard 及其他上游署名、版权、许可和原提交历史。README 明确区分机外工具、未实现的机内照片 LUT 与继承的安装工具验证。公开文件范围见[发布说明](../docs/PUBLISHING.md)。最终提交树与远端结果待核对，不将准备工作计为已发布。
+发布前已检查候选文本与 11 次既有提交中的 53 个历史 blob；未检出所查令牌/私钥，发现一处本机文档路径并替换为通用路径。保留 MDHan、QAQLeonard 及其他上游署名、版权、许可和原提交历史，新增提交使用 GitHub noreply 邮箱。README 明确区分机外工具、未实现的机内照片 LUT 与继承的安装工具验证。公开文件范围见[发布说明](../docs/PUBLISHING.md)；远端源码树、公开属性及首轮 CI 已核对。
 
 ## 遗留与交接
 

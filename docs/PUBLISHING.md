@@ -1,6 +1,6 @@
 # 公开仓库与发布边界
 
-发布目标：[taoking/a7c2-lut-photo-research](https://github.com/taoking/a7c2-lut-photo-research)。首次推送与后续核对状态见[第二十六轮记录](../research/LUT链路调查记录-第二十六轮.md#公开发布)。
+公开仓库：[taoking/a7c2-lut-photo-research](https://github.com/taoking/a7c2-lut-photo-research)。已完成首次源码推送及远端文件核对，详情见[第二十六轮记录](../research/LUT链路调查记录-第二十六轮.md#公开发布)。
 
 本仓库发布机外 LUT 参考工具、只读调查脚本、合成测试、研究记录，以及继承的 macOS 适配源码。**机内照片 LUT 尚未实现，没有照片 LUT 安装包或可用补丁。** 研究测试与相机安装工具的历史实机验证分别记录，不互相替代。
 

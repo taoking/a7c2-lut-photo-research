@@ -2,7 +2,7 @@
 
 继续任务按 [HANDOFF.md](HANDOFF.md) 选择材料；本页仅在基线变化或核对指纹时读取。所有操作仍受根目录 AGENTS.md 约束。
 
-研究起点提交：`5babef40bba986efdd0573380c0ff9f8a027495c`；固定上游：`dd01c07a2a5df004d709595a43ebafe81bbd8fae`。现有 `.venv` 可用，研究要求 Python ≥3.12，依赖独立见 `requirements-lut.txt` / `requirements-firmware.txt`。不要重新安装相机或覆盖已有工作目录。
+研究起点提交：`5babef40bba986efdd0573380c0ff9f8a027495c`；固定上游：`dd01c07a2a5df004d709595a43ebafe81bbd8fae`。公开源码见 [taoking/a7c2-lut-photo-research](https://github.com/taoking/a7c2-lut-photo-research)，材料/输出不随发布上传。现有 `.venv` 可用，研究要求 Python ≥3.12，依赖独立见 `requirements-lut.txt` / `requirements-firmware.txt`。不要重新安装相机或覆盖已有工作目录。
 
 官方包 SHA-256：`eb4943e6099754d64deaef5047942e9bfe258f232d0b7bc39fa23b3cd10e1e31`。已有解包材料根目录：
 

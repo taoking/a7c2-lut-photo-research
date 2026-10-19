@@ -2,7 +2,7 @@
 
 | 编号 | 交付/验收条件 | 当前状态 | 证据与缺口 |
 | --- | --- | --- | --- |
-| M0 | 固定源码、原版材料和独立研究环境可复核 | 已完成 | [固定基线](research/BASELINE.md)；[交接入口](research/HANDOFF.md)；[旧计划归档](plan-history-through-14.md) |
+| M0 | 固定源码、原版材料和独立研究环境可复核 | 已完成 | [公开研究源码](https://github.com/taoking/a7c2-lut-photo-research)；[固定基线](research/BASELINE.md)；[交接入口](research/HANDOFF.md)；[旧计划归档](plan-history-through-14.md) |
 | M1 | 独立机外 CUBE/照片参考工具及合成对照 | 已完成 | `lutphoto/`；真实 CLI 与数学预期验证，不能代替机内验证 |
 | M2 | 导入、转换、消息、LUT 设置/消费链 | 部分完成 | 已定位准备/提交/回调、前置复用条件和后续标量配置；忙时也可进入更新，不能当完成同步；位语义、实际句柄/执行、IPSX 和像素关系未证，见[当前交接](research/HANDOFF.md) |
 | M3 | 完整照片像素链及缓冲/模式证据 | 进行中，当前关键路径 | 已连配置指针生产和 MAIN 前置直接槽位；所查静态行不同时满足此前捕获/MAIN 入口条件，不能拼成同次拍摄链。动态配置/其他捕获入口、格式 3/4 有效传输、照片使能及完整身份仍未证，见[当前交接](research/HANDOFF.md) |
