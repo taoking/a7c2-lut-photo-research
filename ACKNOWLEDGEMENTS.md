@@ -44,3 +44,5 @@ USB 服务协议来自 [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-R
 第三十八轮[描述符/快照只读绑定](docs/SETTINGS-BINDING.md)沿用 QAQLeonard 的描述符/设置保存保护设计与 ma1co BK4 格式来源，复用此前固定和保留许可的纯比较函数。新增只读连接、reset/分配布局与负例不改变原作者归属；未引入上游设备 planner 或执行模块。
 
 第三十九轮[材料清单](docs/IMPORT-MATERIALS.md)连接本仓库 N2 候选、QAQLeonard 的程序/标签布局和既有 68 资源内存改名/逆向规则；继续保留 ma1co 设置格式来源与完整许可。新增相对目录/单次 JSON 读取指纹及声明一致性校验不改变上游归属，不分发资源目标、固件或设备事务。
+
+第四十六轮[认证错误传播离线适配](docs/CAPTURE-AUTH-OFFLINE.md)依据同一 QAQLeonard 固定包内 ma1co 的认证报文及兼容哈希行为；原 crypto.py 注明 [ajalt/python-sha1](https://github.com/ajalt/python-sha1)，这里一并保留来源，ma1co 完整 MIT 许可保持不变。[9 成员清单](research/upstream-auth.lock.json)仅记录来源指纹，不分发认证密钥、挑战或原始应答。新增严格原始长度/异常传播、总期限及一次退出只经过假驱动验证，未接入真实 USB 或改变旧安装器。

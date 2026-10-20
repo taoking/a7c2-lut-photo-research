@@ -28,7 +28,7 @@
 
 已提供独立的[机外 LUT 参考工具](research/README.md)。近期主线是上游 v2.1 的原生 Creative Look 拟合：[N1 固定源码审计](docs/UPSTREAM-V2.1-AUDIT.md)完成，N2 的[拟合/预测](docs/NATIVE-FIT-OFFLINE.md)及[配对标定/冻结验收](docs/NATIVE-VALIDATION.md)离线工具已具备，真实 ST 与相机精度仍待 N4 验证。N3 已有来源/ABI、资源/设置、日志/进程锁和 BK4 离线检查；第三十七轮新增[完整 AP/CP 身份及描述符入口](docs/PROGRAM-IDENTITY.md)，第三十八轮接通[描述符与 RAM/保存快照的只读绑定](docs/SETTINGS-BINDING.md)。第三十九轮连接[原生表/名称资源与私人输入清单](docs/IMPORT-MATERIALS.md)，资源逆向仅在内存验证。正例仅使用自制材料，真实程序/BK4/资源兼容、新鲜同机身来源和完整事务仍缺，尚未接入写入、恢复或 USB/全局相机锁。
 
-独立内部采集路线已有[流程设计](docs/CAPTURE-DESIGN.md)、[纯主机存储/演练](docs/CAPTURE-HOST-OFFLINE.md)、[固定请求/有界协议模型](docs/CAPTURE-PROTOCOL-OFFLINE.md)，第四十四轮补齐[离线会话协调](docs/CAPTURE-SESSION-OFFLINE.md)：自制材料贯穿同源身份/端口、两段假认证、14 个临时状态守卫、逐请求日志及一次退出。第四十五轮新增[旧演练目录只读检查](docs/CAPTURE-INSPECTION.md)，核对日志/材料一致性并保留中断与矛盾，不提供续跑许可。真实认证的异常传播、响应轮廓和排空边界仍未验证；真实采集入口、受限 USB 读适配器及系统相机锁接入尚未实现。首版设备方案仍限定原厂 2.01 固定读取，不加载原生模块。
+独立内部采集路线已有[流程设计](docs/CAPTURE-DESIGN.md)、[纯主机存储/演练](docs/CAPTURE-HOST-OFFLINE.md)、[固定请求/有界协议模型](docs/CAPTURE-PROTOCOL-OFFLINE.md)，第四十四轮补齐[离线会话协调](docs/CAPTURE-SESSION-OFFLINE.md)：自制材料贯穿同源身份/端口、两段假认证、14 个临时状态守卫、逐请求日志及一次退出。第四十五轮新增[旧演练目录只读检查](docs/CAPTURE-INSPECTION.md)，核对日志/材料一致性并保留中断与矛盾，不提供续跑许可。第四十六轮新增独立的[认证报文与错误传播离线适配](docs/CAPTURE-AUTH-OFFLINE.md)，验证原始结果长度、两段认证、共享期限和一次退出；尚未接入材料协调器，不把认证摘要当作完整采集。真实认证、响应轮廓/排空、采集入口、受限 USB 接口和系统相机锁仍未验证或接通。首版设备方案仍限定原厂 2.01 固定读取，不加载原生模块。
 
 任意 3D LUT 的 M2–M4 保留为研究支线，运行配置、有效传输、句柄/MAIN 身份和时序仍未闭合。旧 FL2/FL3 锁和安装器保持原样；相机实测后置，进入前提示，目前无需连接相机。总状态见[里程碑表](plan.md)，继续任务读[当前交接](research/HANDOFF.md)，历史成果见[轮次索引](research/ROUNDS.md)。
 

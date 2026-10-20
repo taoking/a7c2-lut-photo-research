@@ -53,4 +53,4 @@ mkdir -m 700 "$HOME/Pictures/A7C2-capture-demo"
 
 失败发布可能留下部分事件/报告，不能只看到某个 JSON 的完成字段就视为成功，更不能拿它当写入许可；要结合本次实际返回、完整日志和全部材料。第四十五轮另有[旧演练目录只读检查](CAPTURE-INSPECTION.md)，仍没有恢复/续跑入口，也未验证真实断电或文件系统故障后的介质持久性。子进程 SIGKILL 测试证明的是本机进程终止时锁与文件的观察结果。
 
-第四十三轮已有[固定请求与有界协议模型](CAPTURE-PROTOCOL-OFFLINE.md)，第四十四轮另有[会话协调演练](CAPTURE-SESSION-OFFLINE.md)，复用本存储但只接收自制字节；原 SyntheticTape 入口未改。新协调器显式使用最多 2048 事件，默认存储仍为 512。第四十五轮已补旧目录只读检查与中断分类，下一步审阅真实认证错误传播；模拟后端不是可替换为 USB Session 的插件接口。真实采集、USB、原生执行及恢复仍须独立开发和验证，进入前提示。进度见[总计划](../plan.md)、[交接](../research/HANDOFF.md)及[本轮记录](../research/LUT链路调查记录-第四十二轮.md)。
+第四十三轮已有[固定请求与有界协议模型](CAPTURE-PROTOCOL-OFFLINE.md)，第四十四轮另有[会话协调演练](CAPTURE-SESSION-OFFLINE.md)，复用本存储但只接收自制字节；原 SyntheticTape 入口未改。新协调器显式使用最多 2048 事件，默认存储仍为 512。第四十五轮已补旧目录只读检查与中断分类，第四十六轮另有独立[认证错误传播离线适配](CAPTURE-AUTH-OFFLINE.md)，尚未接入材料流；下一步先统一自制流程的认证、预算/日志及一次退出。模拟后端不是可替换为 USB Session 的插件接口。真实采集、USB、原生执行及恢复仍须独立开发和验证，进入前提示。进度见[总计划](../plan.md)、[交接](../research/HANDOFF.md)及[本轮记录](../research/LUT链路调查记录-第四十二轮.md)。

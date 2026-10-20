@@ -1,0 +1,58 @@
+{
+  "schema": "a7c2-auth-source-audit/1",
+  "purpose": "bounded host authentication adaptation; no live USB integration",
+  "repository": "https://github.com/QAQLeonard/a7c2-fl23-research",
+  "tag": "v2.1",
+  "commit": "7e54d60b458847f1befa6cfd614fbf004b8b0b90",
+  "archive_bytes": 331887,
+  "archive_sha256": "8c6c30448219f4e865e8005d2ffa789248e984d73b0f9342035f7065a1a232f7",
+  "baseline_lock_sha256": "8e5467b6f853918fb6d90b8589fc7b2b21466848531a13b1c634ab4bd9429e71",
+  "camera_integration_enabled": false,
+  "files": {
+    "LICENSE": {
+      "bytes": 1234,
+      "sha256": "c592870a8504689cbe03449c2ae582ba6517716c9e0cd2f880cea50c187d16e9",
+      "git_blob_sha1": "2b7e2d9e9a4220a6839d81737d4b4bb00689120a"
+    },
+    "src/fl23/transport.py": {
+      "bytes": 10864,
+      "sha256": "a578ebfd0cffa0f715ec025ef7e661d239652ae8573cea3982a27c8c08f06ccb",
+      "git_blob_sha1": "41ad3678262d335355abe19f5897269cfad08109"
+    },
+    "src/fl23/vendor/pmca/usb/sony.py": {
+      "bytes": 36033,
+      "sha256": "53ffb4d9d49cb5146623fda2b66ecb137681a6fc9ab0c98d23a51e75128af97e",
+      "git_blob_sha1": "9e597375eb645cc498645fbf5c483a9f1c1d77a1"
+    },
+    "src/fl23/vendor/pmca/util/__init__.py": {
+      "bytes": 1485,
+      "sha256": "1bf318b75faf450011123ce430becc87aec8a7a161765afe38c498cdd20cbacf",
+      "git_blob_sha1": "b2ee7d939661150ebb4c0c15f2b8a6eb0d96847e"
+    },
+    "src/fl23/vendor/pmca/usb/crypto.py": {
+      "bytes": 1420,
+      "sha256": "74660a42235f7efac6f47f38e2151049647bd0bc61ed6eb0763538815b2b6886",
+      "git_blob_sha1": "d260d621d391cbbf89606c48e6f0de1c90a8a132"
+    },
+    "src/fl23/vendor/pmca/usb/constants.py": {
+      "bytes": 12369,
+      "sha256": "94bf081d3c1a51a60cf8fc214dce25a491413d4d786716460fde3fba832eb692",
+      "git_blob_sha1": "289756e08b4acca2661957d41fcdcac940b7937c"
+    },
+    "src/fl23/vendor/pmca/usb/driver/generic/__init__.py": {
+      "bytes": 6767,
+      "sha256": "24cda5b97dcd7e5ff4c6af0e0a8d66900688ef2ba09dc0fb53c42ab6b8c69123",
+      "git_blob_sha1": "5deb1bf9b38e18ef047dbdadf1323a80a014421e"
+    },
+    "src/fl23/vendor/pmca/usb/driver/generic/libusb.py": {
+      "bytes": 3027,
+      "sha256": "1c80cfaa0692cf308bd086edc9a9bad3691804b50182993c1dd960c932daa1df",
+      "git_blob_sha1": "78906ede38756b2e7ea087bf38565c44bf3703ae"
+    },
+    "src/fl23/licenses/Sony-PMCA-RE-MIT.txt": {
+      "bytes": 1072,
+      "sha256": "a485f27d0b22eb7fd9b9419795695d0a1750ea32c961d11c1dd8ddade564dedf",
+      "git_blob_sha1": "77b0378407be242b5537f8dca3ed6402c91ba676"
+    }
+  }
+}

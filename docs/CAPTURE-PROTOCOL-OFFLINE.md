@@ -38,4 +38,4 @@ PMCA 忽略排空读取的内容/返回长度，因此即使排空结果形似�
 
 离线专项：`.venv/bin/python -B -m unittest research.tests.test_captureprotocol -q`。41 项包含独立黄金请求、分段/碎片/状态、线路/全局载荷/期限、半包/溢出/中断、未知后停止、完整错误的单次许可，以及与私人存储的载荷读回。单测程序策略和响应全为自制，不要求下载归档。另用实际固定归档校验 143 请求/原厂长度，并喂入自制 HASP 和空 AP 拒绝；没有读取真实程序或备份。
 
-第四十四轮已在离线范围装配固定请求、私人存储及会话协调。可选 `guards=True` 仅从固定来源导出 14 个路径，增加 28 个 select/read 操作，原默认 7/143 请求保持不变；只有守卫完整 missing 状态字可表示模拟不存在，存在包括空文件均停止，详见[会话说明](CAPTURE-SESSION-OFFLINE.md)。没有 USB、真实系统锁或设备 CLI。第四十五轮已有[旧目录只读检查与中断分类](CAPTURE-INSPECTION.md)，下一步离线适配真实认证错误传播，协议边界另行审阅。当前无需相机、Docker 或惠普电脑。见[总计划](../plan.md)、[交接](../research/HANDOFF.md)及[本轮记录](../research/LUT链路调查记录-第四十三轮.md)。
+第四十四轮已在离线范围装配固定请求、私人存储及会话协调。可选 `guards=True` 仅从固定来源导出 14 个路径，增加 28 个 select/read 操作，原默认 7/143 请求保持不变；只有守卫完整 missing 状态字可表示模拟不存在，存在包括空文件均停止，详见[会话说明](CAPTURE-SESSION-OFFLINE.md)。没有 USB、真实系统锁或设备 CLI。第四十五轮已有[旧目录只读检查与中断分类](CAPTURE-INSPECTION.md)，第四十六轮另有独立[原始认证离线适配](CAPTURE-AUTH-OFFLINE.md)，尚未与材料流装配。下一步在自制流程中统一认证、预算和一次退出，协议真实边界另行审阅。当前无需相机、Docker 或惠普电脑。见[总计划](../plan.md)、[交接](../research/HANDOFF.md)及[本轮记录](../research/LUT链路调查记录-第四十三轮.md)。
