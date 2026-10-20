@@ -115,7 +115,10 @@ class Sink:
 
 class Store:
     """One new directory, descriptor-relative files, append-only event chain."""
-    def __init__(self, path):
+    def __init__(self, path, *, events_limit=512):
+        if type(events_limit) is not int or not 1 <= events_limit <= 2048:
+            raise ValueError('Bounded event capacity required')
+        self.events_limit = events_limit
         self.fds, self.lock, self.seq, self.head = {}, None, 0, '0' * 64
         self.documents = {}
         self.path, self.parent = _parent(path)
@@ -236,7 +239,7 @@ class Store:
             sink.close()
 
     def event(self, event, **details):
-        if self.seq >= 512: raise ValueError('Event limit exceeded')
+        if self.seq >= self.events_limit: raise ValueError('Event limit exceeded')
         raw = encoded({'seq': self.seq, 'previous_sha256': self.head, 'event': event, 'details': details})
         result = self.put(f'events/{self.seq:08d}.json', raw, limit=16384)
         self.head = result['sha256']; self.seq += 1

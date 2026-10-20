@@ -33,6 +33,7 @@ class _Request:
     exact: int | None
     status_prefix: bool = False
     response: int = 0
+    guard: bool = False
 
 
 @dataclass(frozen=True)
@@ -42,7 +43,16 @@ class Read:
     timeout_ms: int
 
 
-def _requests(stock, resources):
+def _guard_paths(sources):
+    names = (set(workercontracts.literal(sources['src/fl23/core.py'], 'NATIVE_PATHS'))
+             | set(workercontracts.literal(sources['src/looks/looktool/devicesession.py'], 'TEMP_NAMES')))
+    if len(names) != 13 or any(type(n) is not str or '/' in n or not n for n in names):
+        raise ValueError('Fixed temporary-state inventory differs')
+    return tuple(('guard:' + n, '/tmp/jiritsu/' + n) for n in sorted(names)) + (
+        ('guard:ld.so.preload', '/tmp/jiritsu/../../etc/ld.so.preload'),)
+
+
+def _requests(stock, resources, guards=()):
     files = {'appFw.so': ('usr/lib/appFw.so', stock.ap_bytes),
              'cpapp-b.bin': ('cp/cpapp-b.bin', stock.cp_bytes)}
     if resources:
@@ -58,6 +68,11 @@ def _requests(stock, resources):
             + b'\0/tmp/jiritsu/../../' + path.encode('ascii') + b'\0', 0, 0, True)
         requests['read:' + name] = _Request(0x40, struct.pack('<HH', 0x1001, 17)
             + b'\0\xff\0', limit, limit if name in ('appFw.so', 'cpapp-b.bin') else None, True)
+    for name, path in guards:
+        requests['select:' + name] = _Request(0x40, struct.pack('<HH', 0x1001, 15)
+            + b'\0' + path.encode('ascii') + b'\0', 0, 0, True)
+        requests['read:' + name] = _Request(0x40, struct.pack('<HH', 0x1001, 17)
+            + b'\0\xff\0', 4096, None, True, guard=True)
     return MappingProxyType(requests)
 
 
@@ -68,14 +83,16 @@ The caller feeds ONE result per Read, preserving the separate drain read.
 No callback can open a device here. begin() models a possibly sent request;
 abort() after begin poisons the channel, including a partial outbound write.
 """
-    def __init__(self, archive, *, resources=False, budget=None):
-        if type(resources) is not bool:
-            raise ValueError('Explicit resource selection required')
-        workercontracts.load_sources(archive, inventory=workercontracts.ROOT / 'research/upstream-backup-loader.lock.json')
+    def __init__(self, archive, *, resources=False, guards=False, budget=None):
+        if type(resources) is not bool or type(guards) is not bool:
+            raise ValueError('Explicit resource/guard selection required')
+        _, sources = workercontracts.load_sources(archive, inventory=workercontracts.ROOT / 'research/upstream-backup-loader.lock.json')
         policy = programidentity._load_policy(archive)
         stock, = (s for s in policy.sources if s.kind == 'stock')
-        self.requests = _requests(stock, resources)
-        payload = 88 + 2 * (stock.ap_bytes + stock.cp_bytes) + 4 * bk4.MAX_SNAPSHOT
+        paths = _guard_paths(sources) if guards else ()
+        self.guard_names = tuple(name for name, _ in paths)
+        self.requests = _requests(stock, resources, paths)
+        payload = 88 + 2 * (stock.ap_bytes + stock.cp_bytes) + 4 * bk4.MAX_SNAPSHOT + 2 * len(paths) * 4096
         if resources:
             payload += 136 * customcontracts.MAX_RESOURCE
         self.budget = Budget(payload) if budget is None else budget
@@ -115,7 +132,8 @@ abort() after begin poisons the channel, including a partial outbound write.
             if spec.limit:
                 if (type(sink) is not Sink or sink.closed or sink.size
                         or sink.limit != spec.limit or sink.exact != spec.exact
-                        or sink.budget is not self.budget):
+                        or sink.budget is not self.budget
+                        or spec.guard and sink.store is not None):
                     raise ValueError('Fresh correctly bounded shared-budget Sink required')
             elif sink is not None:
                 raise ValueError('Select response has no payload sink')
@@ -240,13 +258,18 @@ abort() after begin poisons the channel, including a partial outbound write.
         if self.response != self.spec.response:
             raise CompleteResponseError('Complete command returned unsuccessful response')
         if self.spec.status_prefix:
-            if len(self.prefix) != 4 or struct.unpack('<I', self.prefix)[0]:
+            if len(self.prefix) != 4:
+                raise CompleteResponseError('Complete Jiritsu status rejected')
+            status = struct.unpack('<I', self.prefix)[0]
+            if status and not (self.spec.guard and status == 0x10000006 and self.total == 4):
                 raise CompleteResponseError('Complete Jiritsu status rejected')
         size = self.total - len(self.prefix)
         if (self.spec.exact is not None and size != self.spec.exact
-                or self.spec.limit and not size):
+                or self.spec.limit and not size and not self.spec.guard):
             raise CompleteResponseError('Complete response has incorrect payload length')
-        info = self.sink.finish() if self.sink is not None else None
+        info = self.sink.finish() if self.sink is not None and size else None
+        if self.spec.guard and not size:
+            self.sink.close()
         if self.name.startswith('select:'):
             self.selected = self.name[7:]
         elif self.name.startswith('read:'):
@@ -254,6 +277,10 @@ abort() after begin poisons the channel, including a partial outbound write.
         self.result = {'operation': self.name, 'payload': info, 'frames': self.frames,
             'simulation_only': True, 'physical_protocol_verified': False,
             'response_profile_verified': False, 'camera_operations_performed': False}
+        if self.spec.guard:
+            self.result['guard_absent'] = status == 0x10000006
+            if not self.result['guard_absent']:
+                self.blocked = True  # Existing state, including an empty file, stops new reads.
         return self.result
 
     def abort(self):
