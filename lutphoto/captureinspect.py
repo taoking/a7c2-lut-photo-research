@@ -53,7 +53,7 @@ HOST_OPERATIONS={'INVENTORY','MEDIA','UNMOUNT','OPEN_HANDLE','DESCRIPTOR','KERNE
 COMMON = {'schema', 'private_report', 'simulation_only', 'phase', 'reason_type', 'last_stage',
     'simulated_outcome_unknown', 'program_content_matched_in_rehearsal', 'files', 'accepted_payload_bytes',
     'journal_records', 'journal_head_sha256', 'commit', 'archive_sha256'}
-EVENTS = {'INTENT', 'ACK', 'STAGE', 'HOST_FILE_VERIFIED', 'SNAPSHOT_FORMAT_CHECKED', 'SYNTHETIC_PREFLIGHT',
+EVENTS = {'NATIVE_BINDING_CANDIDATE_MODELED', 'INTENT', 'ACK', 'STAGE', 'HOST_FILE_VERIFIED', 'SNAPSHOT_FORMAT_CHECKED', 'SYNTHETIC_PREFLIGHT',
     'PROGRAM_CONTENT_MATCHED', 'OBSERVATIONS_COMPLETE', 'NORMAL_OBSERVATION_MATCHED', 'SYNTHETIC_LOCK_ORDER',
     'GUARD_ABSENCE_MODELED', 'NORMAL_SAME_SOURCE_MATCH_MODELED', 'READY_FOR_REPORT', 'NEEDS_REVIEW', 'RAW_AUTHENTICATION_MODELED', 'RAW_HANDLES_BOUND_MODELED', 'RAW_HANDLE_CLOSED_MODELED','HOST_INTENT','HOST_ACK','OWNED_HOST_BOUND_MODELED','OWNED_HANDLE_CLOSED_MODELED','HOST_WAIT_BEGIN_MODELED','HOST_WAIT_END_MODELED'}
 
@@ -205,7 +205,7 @@ def _ack_plan(profile, resources):
         *optional, *programs, *optional, 'ram', 'saved', *guards, 'service-stop', 'normal-after']
 
 
-def _host_sequence(operations):
+def _host_sequence(operations,*,candidate=False):
     """Exact modeled lifecycle with variable bounded media polling, no values."""
     position=0
     def take(name):
@@ -226,8 +226,10 @@ def _host_sequence(operations):
         detached=optional('DETACH_KERNEL');take('CLAIM_INTERFACE');take('NORMAL_IDENTITY_QUERY')
         return detached
     try:
-        normal();take('DISPOSE_RESOURCES');take('SIMULATE_SERVICE_ARRIVAL')
-        for name in ('INVENTORY','OPEN_HANDLE','DESCRIPTOR','KERNEL_ACTIVE','CLAIM_INTERFACE','DISPOSE_RESOURCES','SIMULATE_NORMAL_ARRIVAL'):take(name)
+        normal();take('DISPOSE_RESOURCES')
+        if not candidate:take('SIMULATE_SERVICE_ARRIVAL')
+        for name in ('INVENTORY','OPEN_HANDLE','DESCRIPTOR','KERNEL_ACTIVE','CLAIM_INTERFACE','DISPOSE_RESOURCES'):take(name)
+        if not candidate:take('SIMULATE_NORMAL_ARRIVAL')
         detached=normal();take('RELEASE_INTERFACE')
         if detached:take('ATTACH_KERNEL')
         take('DISPOSE_RESOURCES')
@@ -245,8 +247,12 @@ class _Evidence:
         self.raw_bindings, self.raw_closes = 0, {}
         self.host_pending,self.host_acks,self.owned_closes={},[],{};self.owned_bindings=0
         self.host_positions=[];self.waits=[];self.active_wait=None
+        self.native_candidates=0
 
     def details_valid(self, event, details):
+        if event=='NATIVE_BINDING_CANDIDATE_MODELED':
+            return (set(details)=={'binding','live_execution_enabled'} and details['binding']=='native-shaped-fake-ops'
+                and details['live_execution_enabled'] is False)
         if event in ('OBSERVATIONS_COMPLETE', 'NORMAL_OBSERVATION_MATCHED', 'NORMAL_SAME_SOURCE_MATCH_MODELED', 'READY_FOR_REPORT'):
             return not details
         if event=='HOST_WAIT_BEGIN_MODELED':
@@ -335,6 +341,8 @@ class _Evidence:
                 op=details.get('operation')
                 if type(op) is not str or op not in HOST_OPERATIONS:
                     self.problem('UNSUPPORTED_HOST_OPERATION',contradiction=True);break
+                if self.native_candidates and op.startswith('SIMULATE_'):
+                    self.problem('NATIVE_CANDIDATE_WITH_FAKE_ARRIVAL_HOOK',contradiction=True)
                 if event=='HOST_INTENT':
                     if self.host_pending and op!='DISPOSE_RESOURCES':self.problem('OVERLAPPED_HOST_INTENT',contradiction=True)
                     self.host_pending.setdefault(op,[]).append(index)
@@ -344,6 +352,11 @@ class _Evidence:
                         self.host_pending[op].pop()
                         if not self.host_pending[op]:del self.host_pending[op]
                     self.host_acks.append(op);self.host_positions.append((op,len(self.acks)))
+            elif event=='NATIVE_BINDING_CANDIDATE_MODELED':
+                self.native_candidates+=1
+                if (self.native_candidates!=1 or self.owned_bindings or self.acks or self.pending
+                        or self.host_acks or self.host_pending):
+                    self.problem('NATIVE_CANDIDATE_OUT_OF_ORDER',contradiction=True)
             elif event=='OWNED_HOST_BOUND_MODELED':
                 self.owned_bindings+=1
                 if self.owned_bindings!=1 or self.acks or self.pending or self.host_acks or self.host_pending:
@@ -443,7 +456,7 @@ class _Evidence:
                     or not 0<=report['owned_handles_closed']<=report['owned_handles_opened']<=3
                     or report['cleanup_error_type'] is not None and (type(report['cleanup_error_type']) is not str or len(report['cleanup_error_type'])>128)):
                 self.problem('INVALID_OWNED_ACCOUNTING',contradiction=True)
-        elif self.host_acks or self.host_pending or self.owned_bindings or self.owned_closes or self.waits or self.active_wait:
+        elif self.host_acks or self.host_pending or self.owned_bindings or self.owned_closes or self.waits or self.active_wait or self.native_candidates:
             self.problem('OWNED_EVIDENCE_WITHOUT_OWNED_REPORT',contradiction=True)
         files = report['files']
         if type(files) is not dict or any(type(n) is not str or n not in MATERIALS or not _info(v) for n, v in files.items()):
@@ -499,6 +512,7 @@ class _Evidence:
             if profile=='owned':
                 host_operations=list(self.host_acks)
                 wait_valid=self.active_wait is None
+                if self.native_candidates:wait_valid &= self.native_candidates==1 and len(self.waits)==2
                 if self.waits:
                     wait_valid &= len(self.waits)==2 and [v[0] for v in self.waits]==['service','normal-return']
                     wait_valid &= all(v[1]=='found' and type(v[2]) is int and 2<=v[2]<=40 for v in self.waits)
@@ -508,7 +522,7 @@ class _Evidence:
                     and report['cleanup_error_type'] is None and report['identity_queries']==2 and report['identity_raw_calls']==28
                     and 16930<=report['accepted_identity_bytes']<=33728
                     and report['owned_handles_opened']==report['owned_handles_closed']==3 and self.owned_bindings==1
-                    and not self.raw_bindings and not self.raw_closes and _host_sequence(host_operations)
+                    and not self.raw_bindings and not self.raw_closes and _host_sequence(host_operations,candidate=bool(self.native_candidates))
                     and [n for op,n in self.host_positions if op=='NORMAL_IDENTITY_QUERY']==[0,len(self.acks)-1]
                     and [n for op,n in self.host_positions if op=='OPEN_HANDLE']==[0,3,len(self.acks)-1]
                     and [n for op,n in self.host_positions if op=='DISPOSE_RESOURCES']==[3,len(self.acks)-1,len(self.acks)]

@@ -56,3 +56,5 @@ USB 服务协议来自 [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-R
 第五十轮[统一所有权离线装配](docs/CAPTURE-OWNED-OFFLINE.md)连接上述 QAQLeonard/ma1co/ajalt 来源的 MSC、认证和材料协议与 Mac 生命周期设计。新增共享预算、借用视图、释放持久证据及第四种只读报告；libusb-package/PyUSB 后端选择仅以假模块验证，未复制其代码或更换依赖。固定来源/真实密钥仅在内存核对，自制材料不构成实机或原厂正例。
 
 第五十一轮[等待/取消与只读预检](docs/CAPTURE-CONTROL-PREFLIGHT.md)延续 QAQLeonard/ma1co/ajalt 固定来源，补充同端口观察、合作式取消及电脑端条件检查。只读审阅已安装 PyUSB 1.3.1 后端管理/传输签名，未复制源码、导入实际 SDK 或更换依赖；严格状态和日志边界不构成原生硬超时或实机验证。
+
+第五十二轮[原生协调候选](docs/CAPTURE-NATIVE-CANDIDATE.md)继续使用 QAQLeonard/ma1co/ajalt 的固定来源、现有认证/读取/所有权实现和完整许可。新增代码由本项目编写；NativeOps 形状的假能力及被动枚举演练不构成实际 SDK、协议或机身验证。只输出来源/请求摘要，不分发认证材料、原厂程序或个人数据。

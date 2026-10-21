@@ -215,6 +215,12 @@ class _Run(p._Run):
         port=_OwnedPort(owner,self.channel);view=r._AuthView(port)
         self.ports.append(port);self.drivers.append(view);return view
 
+    def arrive_service(self):
+        self.host.step('SIMULATE_SERVICE_ARRIVAL',self.system.service_arrival)
+
+    def arrive_normal(self):
+        self.host.step('SIMULATE_NORMAL_ARRIVAL',self.system.normal_arrival)
+
     def body(self,resources):
         self.preflight(resources)
         self.event('OWNED_HOST_BOUND_MODELED',owned_handles=3,same_service_handle=True)
@@ -224,7 +230,7 @@ class _Run(p._Run):
         try:self.auth.normal_auth(view)
         finally:self.sync_auth()
         self._depart(owner,'normal-initial')
-        self.host.step('SIMULATE_SERVICE_ARRIVAL',self.system.service_arrival)
+        self.arrive_service()
         service=self.call('service-observation',self.host.service)
         try:self.auth.service_auth(_observation(service.key),self._port(service))
         finally:self.sync_auth()
@@ -247,7 +253,7 @@ class _Run(p._Run):
         try:self.auth.stop()
         finally:self.sync_auth()
         self._depart(self.host.owners[1],'service')
-        self.host.step('SIMULATE_NORMAL_ARRIVAL',self.system.normal_arrival)
+        self.arrive_normal()
         def returned():
             value=self.host.normal_return();return _observation(self.host.owners[-1].key,value)
         try:self.auth._observe_return(returned)
@@ -279,8 +285,8 @@ class _Run(p._Run):
         return result
 
 
-def rehearse(archive,directory,system,*,resources=False,cancel=None):
-    """One new private job on an exact unused synthetic system; no backend hook."""
+def _prepare(archive,system,resources,cancel):
+    """Shared fixed-source preparation; no host action or public backend hook."""
     if (type(system) is not SyntheticSystem or type(resources) is not bool or system.started or system.trace
             or system.peer.trace or system.peer.counts or any(d.closed or d.trace or d.auth.used or d.auth.trace
                 for d in (system.normal_device,system.service_device))):
@@ -294,12 +300,16 @@ def rehearse(archive,directory,system,*,resources=False,cancel=None):
     policy=programidentity._load_policy(archive)
     channel=OfflineChannel(archive,resources=resources,guards=True)
     channel.budget=Budget(channel.budget.limit+p.AUTH_ALLOWANCE+IDENTITY_ALLOWANCE,clock=system.clock)
-    host=m._Host(system,None,firmware=peer.version,battery_percent=peer.battery,budget=channel.budget,cancel=cancel,wait=True)
+    return cancel,policy,channel
+
+
+def _execute(archive,directory,system,host,channel,policy,*,resources,run_type=_Run):
+    """Internal lifecycle shared by exact-fake rehearsals, never a live entry."""
     store=run=None
     host.__enter__()
     try:
         store=Store(directory,events_limit=s.EVENTS_LIMIT)
-        run=_Run(archive,store,system,host,channel,policy);host.event=run.event
+        run=run_type(archive,store,system,host,channel,policy);host.event=run.event
         try:
             run.body(resources);run.sync_auth()
             if not run.returned or run.blocked or run.unknown or channel.active or any(not o.close_ok for o in host.owners):
@@ -327,3 +337,11 @@ def rehearse(archive,directory,system,*,resources=False,cancel=None):
             try:
                 if store is not None:store.close()
             finally:host.__exit__(*__import__('sys').exc_info())
+
+
+def rehearse(archive,directory,system,*,resources=False,cancel=None):
+    """One new private job on an exact unused synthetic system; no backend hook."""
+    cancel,policy,channel=_prepare(archive,system,resources,cancel)
+    host=m._Host(system,None,firmware=system.peer.version,battery_percent=system.peer.battery,
+                 budget=channel.budget,cancel=cancel,wait=True)
+    return _execute(archive,directory,system,host,channel,policy,resources=resources)
