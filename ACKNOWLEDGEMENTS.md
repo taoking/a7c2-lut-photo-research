@@ -58,3 +58,5 @@ USB 服务协议来自 [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-R
 第五十一轮[等待/取消与只读预检](docs/CAPTURE-CONTROL-PREFLIGHT.md)延续 QAQLeonard/ma1co/ajalt 固定来源，补充同端口观察、合作式取消及电脑端条件检查。只读审阅已安装 PyUSB 1.3.1 后端管理/传输签名，未复制源码、导入实际 SDK 或更换依赖；严格状态和日志边界不构成原生硬超时或实机验证。
 
 第五十二轮[原生协调候选](docs/CAPTURE-NATIVE-CANDIDATE.md)继续使用 QAQLeonard/ma1co/ajalt 的固定来源、现有认证/读取/所有权实现和完整许可。新增代码由本项目编写；NativeOps 形状的假能力及被动枚举演练不构成实际 SDK、协议或机身验证。只输出来源/请求摘要，不分发认证材料、原厂程序或个人数据。
+
+第五十三轮[假SDK组合验证](docs/CAPTURE-NATIVE-OFFLINE.md)沿用QAQLeonard/ma1co/ajalt固定来源和既有许可。新增自制SDK/系统夹具及所有权测试由本项目编写，不复制或执行USB运行库/归档代码，不分发密钥、机身数据或原厂程序；不构成真实SDK/相机验证。

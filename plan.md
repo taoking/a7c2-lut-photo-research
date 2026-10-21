@@ -6,7 +6,7 @@
 | M1 | 独立机外 CUBE/照片参考工具及合成对照 | 已完成 | `lutphoto/`；真实 CLI 与数学预期验证，不能代替机内验证 |
 | N1 | 上游 Custom LUT v2.1 差异、能力和复用清单 | 已完成 | [固定源码审计](docs/UPSTREAM-V2.1-AUDIT.md)；独立审计锁/CLI；明确单机证据及 Mac/工具链缺口，旧安装器锁未改 |
 | N2 | ST 模型/桥接、CUBE→原生表、参考预测及分区误差报告 | 离线工具链完成；真实验收后置 | [拟合/预测](docs/NATIVE-FIT-OFFLINE.md)、[配对标定与冻结验收](docs/NATIVE-VALIDATION.md)、[第三十一轮](research/LUT链路调查记录-第三十一轮.md)；合成验证通过，真实 ST 响应、独立场景身份和相机精度留给 N4，DCP 为后续扩展 |
-| N3 | 独立 Mac Custom 适配、精确迁移/逆向及故障模拟 | 部分完成；第五十二轮协调候选及采集清单离线通过 | [候选/清单](docs/CAPTURE-NATIVE-CANDIDATE.md)、[控制与预检](docs/CAPTURE-CONTROL-PREFLIGHT.md)；真实采集入口仍关闭，SDK/同机材料、事务/worker/恢复及独立介质仍缺 |
+| N3 | 独立 Mac Custom 适配、精确迁移/逆向及故障模拟 | 部分完成；第五十三轮现有适配的假SDK组合验证通过 | [原生方法离线核对](docs/CAPTURE-NATIVE-OFFLINE.md)、[首次采集清单](docs/CAPTURE-NATIVE-CANDIDATE.md)；真实入口关闭，信号/SDK/同机材料、事务/worker/恢复及独立介质仍缺 |
 | N4 | 单槽实测、配对色彩基准、预览/JPEG/回放/冷启动与恢复评估 | 后置，未执行 | N3 审阅和离线检查完成后另行进入；写前两份独立介质完整备份仍不保证恢复，进入前提示，目前无需连接相机 |
 | M2 | 真正 3D LUT：导入、消息、设置/消费链 | 部分完成，研究支线 | 已有控制关系不代表进入完整 JPEG；保留历史证据，不再自动逐轮追踪，见[第二十八轮](research/LUT链路调查记录-第二十八轮.md) |
 | M3 | 真正 3D LUT：完整照片像素链及同次缓冲/模式证据 | 未闭合，暂不自动推进 | 同配置候选及间接驱动边界已定位；运行配置、实际句柄、有效传输、MAIN 身份和时序未证，见[支线交接](research/LUT链路调查记录-第二十八轮.md#遗留与交接) |

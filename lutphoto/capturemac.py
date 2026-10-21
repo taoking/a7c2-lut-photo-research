@@ -110,8 +110,12 @@ class _NativeOps:
                 raise ValueError('Unsafe global camera lock')
             fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
             return fd
-        except BaseException:
-            os.close(fd);raise
+        except BaseException as error:
+            # A failed local close must not replace the original acquisition
+            # error. Its completion is not assumed and acquisition is not retried.
+            try:os.close(fd)
+            except BaseException as cleanup:raise error from cleanup
+            raise
 
     def unlock(self,fd):os.close(fd)  # No unlink/replacement and no authentication changes.
 
@@ -165,8 +169,13 @@ class _NativeOps:
 
     @staticmethod
     def _dispose_all(util,devices,*,suppress=False):
-        error=None
+        error=None;seen=set()
         for device in devices:
+            # Malformed inventories can alias one SDK object. Keep duplicate
+            # observations for rejection, but attempt each local disposal once.
+            identity=id(device)
+            if identity in seen:continue
+            seen.add(identity)
             try:
                 if util.dispose_resources(device) is not None:raise ValueError('Unconfirmed enumeration disposal')
             except BaseException as exc:
