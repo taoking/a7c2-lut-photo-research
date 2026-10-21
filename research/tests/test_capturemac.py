@@ -402,3 +402,44 @@ class CleanupAndGateTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,'disposal'):
             with host:host.normal()
         host.owners[0].close();self.assertEqual(ops.trace.count('dispose'),1)
+
+class PackagedBackendTests(unittest.TestCase):
+    def sdk(self,backend):
+        import types
+        usb=types.ModuleType('usb');usb.__path__=[]
+        core=types.ModuleType('usb.core');core.find=Mock(return_value=[])
+        util=types.ModuleType('usb.util')
+        group=types.ModuleType('usb.backend');group.__path__=[]
+        lib=types.ModuleType('usb.backend.libusb1');lib.get_backend=Mock(return_value=backend)
+        package=types.ModuleType('libusb_package');package.find_library=Mock()
+        usb.core,usb.util,usb.backend=core,util,group;group.libusb1=lib
+        return {'usb':usb,'usb.core':core,'usb.util':util,'usb.backend':group,'usb.backend.libusb1':lib,'libusb_package':package}
+
+    def test_explicit_packaged_backend_selected_once_and_passed_to_find(self):
+        backend=object();sdk=self.sdk(backend);ops=m._NativeOps()
+        with patch.dict(sys.modules,sdk),patch.object(m.os,'geteuid',return_value=0),patch.object(m.sys,'platform','darwin'):
+            self.assertEqual(ops.inventory(),());self.assertEqual(ops.inventory(),())
+        sdk['usb.backend.libusb1'].get_backend.assert_called_once_with(find_library=sdk['libusb_package'].find_library)
+        self.assertEqual(sdk['usb.core'].find.call_count,4)
+        self.assertTrue(all(call.kwargs['backend'] is backend for call in sdk['usb.core'].find.call_args_list))
+
+    def test_missing_packaged_backend_stops_before_enumeration(self):
+        sdk=self.sdk(None)
+        with patch.dict(sys.modules,sdk),patch.object(m.os,'geteuid',return_value=0),patch.object(m.sys,'platform','darwin'):
+            with self.assertRaises(RuntimeError):m._NativeOps().inventory()
+        sdk['usb.core'].find.assert_not_called()
+
+    def test_native_control_preserves_count_and_explicit_timeout(self):
+        device=Mock();device.ctrl_transfer.return_value=0
+        self.assertEqual(m._NativeOps().control(device,0x43,1,0x37ff,0xd7aa,b'',123),0)
+        device.ctrl_transfer.assert_called_once_with(0x43,1,0x37ff,0xd7aa,b'',timeout=123)
+
+    def test_disposal_journal_failure_still_invalidates_and_disposes_once(self):
+        ops=FakeOps()
+        def event(name,**details):
+            if name=='HOST_ACK' and details['operation']=='DISPOSE_RESOURCES':raise OSError('own journal')
+        host=m._Host(ops,event,firmware='2.01',battery_percent=75)
+        with self.assertRaises(OSError):
+            with host:host.normal()
+        host.owners[0].close();self.assertTrue(host.owners[0].closed);self.assertFalse(host.owners[0].close_ok)
+        self.assertEqual(ops.trace.count('dispose'),1);self.assertEqual(ops.trace[-1],'unlock')

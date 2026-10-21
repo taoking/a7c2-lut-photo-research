@@ -104,6 +104,7 @@ class _Port:
         if type(budget) is not Budget or type(channel) is not OfflineChannel or channel.budget is not budget:
             raise TypeError('One exact shared channel/budget required')
         self._device,self.budget,self.channel=device,budget,channel
+        self.pid=device.pid
         device._requests=channel.requests
         self.started=self.authenticated=self.stopped=self.unknown=self.closed=self.close_attempted=False
         self.close_ok=False
@@ -163,7 +164,7 @@ class _Port:
 
 
 class _AuthView:
-    def __init__(self, port): self._port,self.pid,self.trace=port,port._device.pid,[]
+    def __init__(self, port): self._port,self.pid,self.trace=port,port.pid,[]
 
     def control_out(self, request_type, request, value, index, raw, timeout_ms):
         port=self._port; control=(request_type,request,value,index)

@@ -90,9 +90,15 @@ class _NativeOps:
     def _runtime(self):
         import sys
         if sys.platform!='darwin' or os.geteuid()!=0:raise PermissionError('macOS administrator context required')
-        import usb.core
-        import usb.util
-        return usb.core,usb.util
+        if getattr(self,'_sdk',None) is None:
+            import usb.core
+            import usb.util
+            import usb.backend.libusb1
+            import libusb_package
+            backend=usb.backend.libusb1.get_backend(find_library=libusb_package.find_library)
+            if backend is None:raise RuntimeError('Packaged libusb backend unavailable')
+            self._backend,self._sdk=backend,(usb.core,usb.util)
+        return self._sdk
 
     def acquire(self):
         if sys.platform!='darwin' or os.geteuid()!=0:raise PermissionError('macOS administrator lock required')
@@ -148,7 +154,7 @@ class _NativeOps:
         core,util=self._runtime();devices=[]
         try:
             for pid in (NORMAL,SERVICE):
-                for device in core.find(find_all=True,idVendor=0x054c,idProduct=pid):
+                for device in core.find(find_all=True,idVendor=0x054c,idProduct=pid,backend=getattr(self,'_backend',None)):
                     devices.append(device)
                     if len(devices)>16:raise ValueError('USB inventory bound exceeded')
             return devices,util
@@ -200,6 +206,8 @@ class _NativeOps:
     def claim(self,d):return self._runtime()[1].claim_interface(d,0)
     def release(self,d):return self._runtime()[1].release_interface(d,0)
     def dispose(self,d):return self._runtime()[1].dispose_resources(d)
+    def control(self,d,request_type,request,value,index,raw,timeout):
+        return d.ctrl_transfer(request_type,request,value,index,raw,timeout=timeout)
     def write(self,d,ep,data,timeout):return d.write(ep,data,timeout=timeout)
     def read(self,d,ep,size,timeout):return d.read(ep,size,timeout=timeout)
 
@@ -223,6 +231,7 @@ class _Owner:
         self.host,self.key,self.device=host,key,device
         self.claimed=self.detached=self.unknown=self.transition=self.closed=False
         self.profile=None;self.queried=False
+        self.identity_bytes=self.identity_calls=0;self.close_ok=False
 
     def query(self):
         if self.closed or self.unknown or self.transition or not self.claimed or self.queried or self.key.pid!=NORMAL:
@@ -238,6 +247,8 @@ class _Owner:
         try:return self.host.step('NORMAL_IDENTITY_QUERY',query.run)
         except BaseException:
             self.unknown=True;raise
+        finally:
+            self.identity_bytes=query.accepted_bytes;self.identity_calls=query.calls
 
     def close(self):
         if self.closed:return
@@ -253,12 +264,12 @@ class _Owner:
         try:
             # SDK disposal can implicitly release an interface. This is not proof
             # of physical closure or zero USB-stack activity after a disconnect.
-            result=self.host.ops.dispose(self.device)
-            if result is not None:raise ValueError('Unconfirmed SDK disposal')
+            self.host.dispose(self.device)
         except BaseException as exc:
             if error is None:error=exc
         if error is not None:
             self.host.blocked=True;raise error
+        self.close_ok=True
 
 
 class _Host:
@@ -303,6 +314,23 @@ class _Host:
             return result
         except BaseException:
             self.blocked=True;raise
+
+    def dispose(self,device):
+        # Local cleanup is attempted even if the journal is already broken.
+        # Its intent/ACK are separate from protocol stop and never replayed.
+        error=None;intent=False;accepted=False
+        try:self.event('HOST_INTENT',operation='DISPOSE_RESOURCES');intent=True
+        except BaseException as exc:error=exc
+        try:
+            if self.ops.dispose(device) is not None:raise ValueError('Unconfirmed SDK disposal')
+            accepted=True
+        except BaseException as exc:
+            if error is None:error=exc
+        if intent and accepted:
+            try:self.event('HOST_ACK',operation='DISPOSE_RESOURCES')
+            except BaseException as exc:
+                if error is None:error=exc
+        if error is not None:self.blocked=True;raise error
 
     def management(self,name,action):
         def checked():

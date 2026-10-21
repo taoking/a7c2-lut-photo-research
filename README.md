@@ -28,7 +28,7 @@
 
 已提供独立的[机外 LUT 参考工具](research/README.md)。近期主线是上游 v2.1 的原生 Creative Look 拟合：[N1 固定源码审计](docs/UPSTREAM-V2.1-AUDIT.md)完成，N2 的[拟合/预测](docs/NATIVE-FIT-OFFLINE.md)及[配对标定/冻结验收](docs/NATIVE-VALIDATION.md)离线工具已具备，真实 ST 与相机精度仍待 N4 验证。N3 已有来源/ABI、资源/设置、日志/进程锁和 BK4 离线检查；第三十七轮新增[完整 AP/CP 身份及描述符入口](docs/PROGRAM-IDENTITY.md)，第三十八轮接通[描述符与 RAM/保存快照的只读绑定](docs/SETTINGS-BINDING.md)。第三十九轮连接[原生表/名称资源与私人输入清单](docs/IMPORT-MATERIALS.md)，资源逆向仅在内存验证。正例仅使用自制材料，真实程序/BK4/资源兼容、新鲜同机身来源和完整事务仍缺，尚未接入写入、恢复或 USB/全局相机锁。
 
-内部材料采集已有[设计](docs/CAPTURE-DESIGN.md)、[固定协议](docs/CAPTURE-PROTOCOL-OFFLINE.md)和[统一离线协调器](docs/CAPTURE-PIPELINE-OFFLINE.md)。第四十八轮的[受限原始接口](docs/CAPTURE-RAW-OFFLINE.md)让认证/材料/退出共用同一模拟服务对象；第四十九轮新增独立的[Mac 宿主生命周期与 MSC 身份查询代码](docs/CAPTURE-MAC-OFFLINE.md)，在假系统上验证卸载/接管/释放及新开普通句柄查询同来源身份。宿主尚未接入既有材料协调器、Store/检查格式或采集 CLI；真实系统锁、管理调用时限、协议轮廓/排空和新鲜同机材料仍未验证。[只读检查器](docs/CAPTURE-INSPECTION.md)保留三种离线格式。首版设备设计仍限定精确原厂 2.01 固定读取，不加载原生模块；离线开发不要求现在升级相机。
+内部材料采集已有[设计](docs/CAPTURE-DESIGN.md)、[固定协议](docs/CAPTURE-PROTOCOL-OFFLINE.md)和[统一离线协调器](docs/CAPTURE-PIPELINE-OFFLINE.md)。第四十八轮的[受限原始接口](docs/CAPTURE-RAW-OFFLINE.md)让认证/材料/退出共用同一模拟服务对象；第四十九轮新增独立的[Mac 宿主生命周期与 MSC 身份查询代码](docs/CAPTURE-MAC-OFFLINE.md)，在假系统上验证卸载/接管/释放及新开普通句柄查询同来源身份。第五十轮已用[统一离线装配](docs/CAPTURE-OWNED-OFFLINE.md)连接宿主、两次 MSC 查询、认证、同服务句柄材料/退出和 Store；[只读检查器](docs/CAPTURE-INSPECTION.md)新增第四种证据格式。公共入口仍只接受精确假系统，没有真实采集 CLI；实际管理调用阻塞/重枚举、系统锁、协议轮廓/排空和新鲜同机材料尚未验证。首版设备设计仍限定精确原厂 2.01 固定读取，不加载原生模块；离线开发不要求现在升级相机。
 
 任意 3D LUT 的 M2–M4 保留为研究支线，运行配置、有效传输、句柄/MAIN 身份和时序仍未闭合。旧 FL2/FL3 锁和安装器保持原样；相机实测后置，进入前提示，目前无需连接相机。总状态见[里程碑表](plan.md)，继续任务读[当前交接](research/HANDOFF.md)，历史成果见[轮次索引](research/ROUNDS.md)。
 

@@ -19,7 +19,8 @@ MIB = 1024 * 1024
 FOLDERS = ('source', 'evidence', 'resources', 'events')
 REPORTS = {'capture-report.private.json': ('host', 'a7c2-synthetic-host-capture-report/1', 'SIMULATED_HOST_CAPTURE_COMPLETE'),
            'session-report.private.json': ('session', 'a7c2-synthetic-session-coordination/1', 'SIMULATED_SESSION_COMPLETE'),
-           'pipeline-report.private.json': ('pipeline', 'a7c2-synthetic-authenticated-capture/1', 'SIMULATED_AUTHENTICATED_CAPTURE_COMPLETE')}
+           'pipeline-report.private.json': ('pipeline', 'a7c2-synthetic-authenticated-capture/1', 'SIMULATED_AUTHENTICATED_CAPTURE_COMPLETE'),
+           'owned-report.private.json': ('owned','a7c2-synthetic-owned-capture/1','SIMULATED_OWNED_CAPTURE_COMPLETE')}
 CORE = ('source/appFw.so', 'source/cpapp-b.bin', 'source/settings-ram.bin', 'source/settings-saved.bin',
         'evidence/settings-ram-end.bin', 'evidence/settings-saved-end.bin')
 MATERIALS = {n: 128 * MIB if n.endswith(('.so', '.bin')) and n in CORE[:2] else 32 * MIB for n in CORE}
@@ -40,12 +41,21 @@ EXTRA_PROFILE = {'host': {'host_files_integrity_checked', 'simulated_service_exi
 FALSE_PROFILE['pipeline'] = FALSE_PROFILE['session'] | {'actual_authentication_verified', 'fresh_normal_observation_verified', 'resume_allowed'}
 PIPELINE_COUNTERS = {'accepted_auth_bytes', 'accepted_total_bytes', 'auth_raw_calls'}
 EXTRA_PROFILE['pipeline'] = EXTRA_PROFILE['session'] | PIPELINE_COUNTERS | {'authentication_phase', 'shared_budget_modeled', 'pipeline_blocked'}
+OWNED_COUNTERS={'accepted_identity_bytes','identity_queries','identity_raw_calls','owned_handles_opened','owned_handles_closed'}
+FALSE_PROFILE['owned']=FALSE_PROFILE['pipeline']
+EXTRA_PROFILE['owned']=EXTRA_PROFILE['pipeline']|OWNED_COUNTERS|{'host_binding_modeled','host_blocked','cleanup_error_type'}
+HOST_OPERATIONS={'INVENTORY','MEDIA','UNMOUNT','OPEN_HANDLE','DESCRIPTOR','KERNEL_ACTIVE','DETACH_KERNEL',
+    'CLAIM_INTERFACE','NORMAL_IDENTITY_QUERY','DISPOSE_RESOURCES','RELEASE_INTERFACE','ATTACH_KERNEL',
+    'SIMULATE_SERVICE_ARRIVAL','SIMULATE_NORMAL_ARRIVAL'}
+
+
+
 COMMON = {'schema', 'private_report', 'simulation_only', 'phase', 'reason_type', 'last_stage',
     'simulated_outcome_unknown', 'program_content_matched_in_rehearsal', 'files', 'accepted_payload_bytes',
     'journal_records', 'journal_head_sha256', 'commit', 'archive_sha256'}
 EVENTS = {'INTENT', 'ACK', 'STAGE', 'HOST_FILE_VERIFIED', 'SNAPSHOT_FORMAT_CHECKED', 'SYNTHETIC_PREFLIGHT',
     'PROGRAM_CONTENT_MATCHED', 'OBSERVATIONS_COMPLETE', 'NORMAL_OBSERVATION_MATCHED', 'SYNTHETIC_LOCK_ORDER',
-    'GUARD_ABSENCE_MODELED', 'NORMAL_SAME_SOURCE_MATCH_MODELED', 'READY_FOR_REPORT', 'NEEDS_REVIEW', 'RAW_AUTHENTICATION_MODELED', 'RAW_HANDLES_BOUND_MODELED', 'RAW_HANDLE_CLOSED_MODELED'}
+    'GUARD_ABSENCE_MODELED', 'NORMAL_SAME_SOURCE_MATCH_MODELED', 'READY_FOR_REPORT', 'NEEDS_REVIEW', 'RAW_AUTHENTICATION_MODELED', 'RAW_HANDLES_BOUND_MODELED', 'RAW_HANDLE_CLOSED_MODELED','HOST_INTENT','HOST_ACK','OWNED_HOST_BOUND_MODELED','OWNED_HANDLE_CLOSED_MODELED'}
 
 
 class _Refused(ValueError):
@@ -195,6 +205,36 @@ def _ack_plan(profile, resources):
         *optional, *programs, *optional, 'ram', 'saved', *guards, 'service-stop', 'normal-after']
 
 
+def _host_sequence(operations):
+    """Exact modeled lifecycle with variable bounded media polling, no values."""
+    position=0
+    def take(name):
+        nonlocal position
+        if position>=len(operations) or operations[position]!=name:raise ValueError('Host order')
+        position+=1
+    def optional(name):
+        nonlocal position
+        if position<len(operations) and operations[position]==name:position+=1;return True
+        return False
+    def normal():
+        take('INVENTORY');media=unmount=0
+        while position<len(operations) and operations[position] in ('MEDIA','UNMOUNT'):
+            if optional('MEDIA'):media+=1
+            else:take('UNMOUNT');unmount+=1
+        if media<3 or unmount<1:raise ValueError('Media lifecycle')
+        for name in ('INVENTORY','OPEN_HANDLE','DESCRIPTOR','KERNEL_ACTIVE'):take(name)
+        detached=optional('DETACH_KERNEL');take('CLAIM_INTERFACE');take('NORMAL_IDENTITY_QUERY')
+        return detached
+    try:
+        normal();take('DISPOSE_RESOURCES');take('SIMULATE_SERVICE_ARRIVAL')
+        for name in ('INVENTORY','OPEN_HANDLE','DESCRIPTOR','KERNEL_ACTIVE','CLAIM_INTERFACE','DISPOSE_RESOURCES','SIMULATE_NORMAL_ARRIVAL'):take(name)
+        detached=normal();take('RELEASE_INTERFACE')
+        if detached:take('ATTACH_KERNEL')
+        take('DISPOSE_RESOURCES')
+        return position==len(operations)
+    except ValueError:return False
+
+
 class _Evidence:
     def __init__(self):
         self.issues, self.inconsistent = set(), False
@@ -203,10 +243,18 @@ class _Evidence:
         self.orphans, self.unknown = 0, False
         self.raw_auth_markers = 0
         self.raw_bindings, self.raw_closes = 0, {}
+        self.host_pending,self.host_acks,self.owned_closes={},[],{};self.owned_bindings=0
+        self.host_positions=[]
 
     def details_valid(self, event, details):
         if event in ('OBSERVATIONS_COMPLETE', 'NORMAL_OBSERVATION_MATCHED', 'NORMAL_SAME_SOURCE_MATCH_MODELED', 'READY_FOR_REPORT'):
             return not details
+        if event in ('HOST_INTENT','HOST_ACK'):
+            return set(details)=={'operation'} and type(details['operation']) is str and details['operation'] in HOST_OPERATIONS
+        if event=='OWNED_HOST_BOUND_MODELED':
+            return set(details)=={'owned_handles','same_service_handle'} and type(details['owned_handles']) is int and details['owned_handles']==3 and details['same_service_handle'] is True
+        if event=='OWNED_HANDLE_CLOSED_MODELED':
+            return set(details)=={'role'} and details['role'] in ('normal-initial','service','normal-return')
         if event == 'RAW_HANDLES_BOUND_MODELED':
             return (set(details)=={'owned_handles','same_service_handle'}
                 and type(details['owned_handles']) is int and details['owned_handles']==2 and details['same_service_handle'] is True)
@@ -265,6 +313,28 @@ class _Evidence:
                 else:
                     if op not in self.pending: self.problem('ACK_WITHOUT_INTENT', contradiction=True)
                     self.pending.pop(op, None); self.acks.append(op)
+            elif event in ('HOST_INTENT','HOST_ACK'):
+                op=details.get('operation')
+                if type(op) is not str or op not in HOST_OPERATIONS:
+                    self.problem('UNSUPPORTED_HOST_OPERATION',contradiction=True);break
+                if event=='HOST_INTENT':
+                    if self.host_pending and op!='DISPOSE_RESOURCES':self.problem('OVERLAPPED_HOST_INTENT',contradiction=True)
+                    self.host_pending.setdefault(op,[]).append(index)
+                else:
+                    if op not in self.host_pending:self.problem('HOST_ACK_WITHOUT_INTENT',contradiction=True)
+                    if op in self.host_pending:
+                        self.host_pending[op].pop()
+                        if not self.host_pending[op]:del self.host_pending[op]
+                    self.host_acks.append(op);self.host_positions.append((op,len(self.acks)))
+            elif event=='OWNED_HOST_BOUND_MODELED':
+                self.owned_bindings+=1
+                if self.owned_bindings!=1 or self.acks or self.pending or self.host_acks or self.host_pending:
+                    self.problem('OWNED_BINDING_OUT_OF_ORDER',contradiction=True)
+            elif event=='OWNED_HANDLE_CLOSED_MODELED':
+                role=details.get('role')
+                if self.owned_bindings!=1 or role in self.owned_closes:
+                    self.problem('OWNED_CLOSE_WITHOUT_UNIQUE_BINDING',contradiction=True)
+                if type(role) is str:self.owned_closes[role]=(len(self.acks),bool(self.pending or self.host_pending))
             elif event == 'HOST_FILE_VERIFIED':
                 file = details.get('file')
                 expected = {k: v for k, v in details.items() if k != 'file'}
@@ -328,7 +398,8 @@ class _Evidence:
             self.problem('INVALID_REPORT_METADATA', contradiction=True)
         boolean = {'simulated_outcome_unknown', 'program_content_matched_in_rehearsal'}
         nonboolean = {'resource_count'} if profile == 'host' else {'accepted_wire_bytes', 'requests'}
-        if profile == 'pipeline': nonboolean |= PIPELINE_COUNTERS | {'authentication_phase'}
+        if profile in ('pipeline','owned'): nonboolean |= PIPELINE_COUNTERS | {'authentication_phase'}
+        if profile=='owned':nonboolean |= OWNED_COUNTERS|{'cleanup_error_type'}
         boolean |= EXTRA_PROFILE[profile] - nonboolean
         if any(type(report[k]) is not bool for k in boolean):
             self.problem('INVALID_REPORT_FLAGS', contradiction=True)
@@ -336,16 +407,26 @@ class _Evidence:
                 or report['journal_head_sha256'] != self.head):
             self.problem('REPORT_JOURNAL_DIFFERS', contradiction=True)
         counters = {'accepted_payload_bytes'} | ({'accepted_wire_bytes', 'requests'} if profile != 'host' else set())
-        if profile == 'pipeline': counters |= PIPELINE_COUNTERS
+        if profile in ('pipeline','owned'): counters |= PIPELINE_COUNTERS
         for counter in counters:
             if type(report[counter]) is not int or not 0 <= report[counter] <= 2**31:
                 self.problem('INVALID_REPORT_COUNTER', contradiction=True)
-        if profile == 'pipeline':
+        if profile in ('pipeline','owned'):
             if (report['authentication_phase'] not in ('NOT_STARTED','NEW','NORMAL_CONTROL_RETURNED','WAIT_SERVICE',
                     'SERVICE_CONTROL_RETURNED','SERVICE_AUTHENTICATED','STOP_CONTROL_RETURNED','SYNTHETIC_RETURN_MATCHED','NEEDS_REVIEW')
                     or report['accepted_auth_bytes'] > 32768 or report['auth_raw_calls'] > 31
-                    or report['accepted_total_bytes'] != report['accepted_payload_bytes'] + report['accepted_auth_bytes']):
+                    or report['accepted_total_bytes'] != report['accepted_payload_bytes'] + report['accepted_auth_bytes'] + (report.get('accepted_identity_bytes',0) if profile=='owned' else 0)):
                 self.problem('INVALID_AUTHENTICATION_ACCOUNTING', contradiction=True)
+        if profile=='owned':
+            counters |= OWNED_COUNTERS
+            for counter in OWNED_COUNTERS:
+                if type(report[counter]) is not int or not 0<=report[counter]<=65536:self.problem('INVALID_OWNED_COUNTER',contradiction=True)
+            if (report['accepted_identity_bytes']>65536 or report['identity_queries']>2 or report['identity_raw_calls']>28
+                    or not 0<=report['owned_handles_closed']<=report['owned_handles_opened']<=3
+                    or report['cleanup_error_type'] is not None and (type(report['cleanup_error_type']) is not str or len(report['cleanup_error_type'])>128)):
+                self.problem('INVALID_OWNED_ACCOUNTING',contradiction=True)
+        elif self.host_acks or self.host_pending or self.owned_bindings or self.owned_closes:
+            self.problem('OWNED_EVIDENCE_WITHOUT_OWNED_REPORT',contradiction=True)
         files = report['files']
         if type(files) is not dict or any(type(n) is not str or n not in MATERIALS or not _info(v) for n, v in files.items()):
             self.problem('INVALID_REPORT_MATERIALS', contradiction=True); files = {}
@@ -359,7 +440,7 @@ class _Evidence:
             resources = any(n.startswith('resources/') for n in self.actual)
             expected = set(CORE) | ({'resources/' + n for n in RESOURCE_FILES} if resources else set())
             prerequisites = (self.actual.keys() == expected and files.keys() == expected
-                and self.verified.keys() == expected and not self.pending and not self.unknown
+                and self.verified.keys() == expected and not self.pending and not self.host_pending and not self.unknown
                 and report['program_content_matched_in_rehearsal'] is True and report['reason_type'] is None
                 and report['last_stage'] == 'C5' and self.events and self.events[-1] == 'READY_FOR_REPORT'
                 and self.acks == _ack_plan(profile, resources)
@@ -387,7 +468,7 @@ class _Evidence:
                     and self.events.count('SYNTHETIC_LOCK_ORDER') == 1
                     and report['requests'] == sum(op in ('hasp', 'ram', 'saved') or op.startswith(('read:', 'select:')) for op in self.acks)
                     and report['accepted_wire_bytes'] >= report['accepted_payload_bytes'] + 24 * report['requests'])
-            if profile == 'pipeline':
+            if profile in ('pipeline','owned'):
                 prerequisites &= (report['accepted_auth_bytes'] == 14448 and report['auth_raw_calls'] == 31
                     and report['authentication_phase'] == 'SYNTHETIC_RETURN_MATCHED'
                     and report['shared_budget_modeled'] is True and report['pipeline_blocked'] is False
@@ -397,6 +478,16 @@ class _Evidence:
                         'normal-initial':(3,False),'service':(len(self.acks)-1,False)})
             else:
                 prerequisites &= self.raw_auth_markers == 0 and self.raw_bindings == 0 and not self.raw_closes
+            if profile=='owned':
+                prerequisites &= (report['host_binding_modeled'] is True and report['host_blocked'] is False
+                    and report['cleanup_error_type'] is None and report['identity_queries']==2 and report['identity_raw_calls']==28
+                    and 16930<=report['accepted_identity_bytes']<=33728
+                    and report['owned_handles_opened']==report['owned_handles_closed']==3 and self.owned_bindings==1
+                    and not self.raw_bindings and not self.raw_closes and _host_sequence(self.host_acks)
+                    and [n for op,n in self.host_positions if op=='NORMAL_IDENTITY_QUERY']==[0,len(self.acks)-1]
+                    and [n for op,n in self.host_positions if op=='OPEN_HANDLE']==[0,3,len(self.acks)-1]
+                    and [n for op,n in self.host_positions if op=='DISPOSE_RESOURCES']==[3,len(self.acks)-1,len(self.acks)]
+                    and self.owned_closes=={'normal-initial':(3,False),'service':(len(self.acks)-1,False),'normal-return':(len(self.acks),False)})
             if not prerequisites or self.issues:
                 self.problem('COMPLETE_REPORT_WITH_INCOMPLETE_EVIDENCE', contradiction=True)
         else:
@@ -413,7 +504,7 @@ def _result(classification, evidence=None, refusal=None):
         'program_policy_revalidated': False, 'material_formats_revalidated': False,
         'restore_verified': False, 'write_plan_enabled': False, 'resume_allowed': False,
         'journal_records_checked': evidence.count if evidence else 0,
-        'unacknowledged_intents': len(evidence.pending) if evidence else 0,
+        'unacknowledged_intents': len(evidence.pending)+sum(map(len,evidence.host_pending.values())) if evidence else 0,
         'materials_hashed': len(evidence.actual) if evidence else 0,
         'unjournaled_materials': evidence.orphans if evidence else 0,
         'issues': sorted(evidence.issues) if evidence else [refusal]}
@@ -433,7 +524,7 @@ def inspect_directory(directory):
         complete = evidence.report(reader)
         reader.check()
         if evidence.inconsistent: classification = 'EVIDENCE_INCONSISTENT'
-        elif evidence.pending or evidence.unknown: classification = 'NEEDS_REVIEW_UNKNOWN'
+        elif evidence.pending or evidence.host_pending or evidence.unknown: classification = 'NEEDS_REVIEW_UNKNOWN'
         elif complete and not evidence.issues: classification = 'CONSISTENT_SIMULATION_COMPLETE'
         else: classification = 'NEEDS_REVIEW_INCOMPLETE'
         return _result(classification, evidence)
