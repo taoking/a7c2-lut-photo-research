@@ -142,6 +142,7 @@ class _RawAuth:
     def __init__(self, driver, keys, budget):
         self.driver, self.keys, self.budget = driver, keys, budget
         self.unknown = False
+        self.accepted_bytes = 0
 
     def _io(self, kind, raw=None, *, stop=False):
         if self.unknown: raise RuntimeError('Unknown authentication outcome; no further I/O')
@@ -158,10 +159,12 @@ class _RawAuth:
                 result = self.driver.write(raw, timeout)
                 if type(result) is not int or result != AUTH.size: raise ValueError('Authentication packet send length differs')
                 self.budget.accept(AUTH.size)
+                self.accepted_bytes += AUTH.size
             else:
                 result = self.driver.read(AUTH.size, timeout)
                 if type(result) is not bytes or len(result) != AUTH.size: raise ValueError('Authentication response must be one complete packet')
                 self.budget.accept(AUTH.size)
+                self.accepted_bytes += AUTH.size
             self.budget.check()
             return result
         except BaseException:
@@ -260,18 +263,25 @@ class OfflineAuthFlow:
         self._action('service-stop', request, 'STOP_CONTROL_RETURNED')
 
     def observe_return(self, value):
+        self._observe_return(lambda: value)
+
+    def _observe_return(self, observation):
         if self.phase != 'STOP_CONTROL_RETURNED' or self.unknown or self.blocked:
             raise RuntimeError('No normal return observation allowance')
         def validate():
-            if _normal(value) != self.initial: raise ValueError('Normal same-source identity/physical port differs')
+            if _normal(observation()) != self.initial: raise ValueError('Normal same-source identity/physical port differs')
         self._action('normal-after', validate, 'SYNTHETIC_RETURN_MATCHED')
+
+    @property
+    def accepted_bytes(self):
+        return sum(stage.accepted_bytes for stage in (self.normal, self.service) if stage is not None)
 
     def summary(self):
         return {'schema': 'a7c2-synthetic-raw-authentication/1', 'private_report': True,
             'status': ('NEEDS_REVIEW' if self.blocked or self.unknown else
                        'SIMULATED_AUTH_COMPLETE' if self.phase == 'SYNTHETIC_RETURN_MATCHED' else 'IN_PROGRESS'),
             'simulation_only': True, 'phase': self.phase, 'outcome_unknown': self.unknown, 'blocked': self.blocked,
-            'accepted_auth_bytes': self.budget.used, 'exit_attempted': self.exit_attempted,
+            'accepted_auth_bytes': self.accepted_bytes, 'exit_attempted': self.exit_attempted,
             'camera_operations_performed': False, 'actual_authentication_verified': False,
             'actual_source_identity_verified': False, 'physical_protocol_verified': False,
             'fresh_normal_observation_verified': False, 'global_camera_lock_acquired': False,

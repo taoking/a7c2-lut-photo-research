@@ -128,11 +128,14 @@ class _Run:
         self.normal_open = self.service_open = self.returned = self.programs_matched = False
         self.stage = 'C0'
 
+    def event(self, event, **details):
+        self.store.event(event, **details)
+
     def call(self, name, action, *, wire=False):
         if self.unknown:
             raise RuntimeError('Unknown synthetic session; no further commands')
         self.channel.budget.check()
-        self.store.event('INTENT', operation=name)
+        self.event('INTENT', operation=name)
         if name == 'auth-normal-start': self.transition = True
         try:
             value = action()
@@ -149,7 +152,7 @@ class _Run:
         # failure cannot accidentally authorize a second auth/stop operation.
         if name == 'auth-service-verify': self.authenticated = True
         if name == 'service-stop': self.stop_ack = True; self.authenticated = False
-        self.store.event('ACK', operation=name)
+        self.event('ACK', operation=name)
         return value
 
     def wire(self, name, sink=None):
@@ -173,7 +176,7 @@ class _Run:
                     raise ValueError('Existing temporary state; preserve without cleanup')
             finally:
                 sink.close()
-        self.store.event('GUARD_ABSENCE_MODELED', count=len(self.channel.guard_names))
+        self.event('GUARD_ABSENCE_MODELED', count=len(self.channel.guard_names))
 
     def receive(self, name, relative=None, expected=None):
         operation = name if name in ('ram', 'saved', 'hasp') else 'read:' + name
@@ -187,7 +190,7 @@ class _Run:
             sink.close()
         if relative is not None:
             self.files[relative] = info
-            self.store.event('HOST_FILE_VERIFIED', file=relative, **info)
+            self.event('HOST_FILE_VERIFIED', file=relative, **info)
         if expected is not None and info != expected:
             raise ValueError('Complete synthetic content differs from fixed expectation')
         return info
@@ -198,7 +201,7 @@ class _Run:
         if end and scope != self.scopes[name]:
             raise ValueError('Scoped snapshot changed')
         self.scopes[name] = scope
-        self.store.event('SNAPSHOT_FORMAT_CHECKED', file=relative)
+        self.event('SNAPSHOT_FORMAT_CHECKED', file=relative)
 
     def exit(self):
         if not self.authenticated or self.unknown or self.exit_attempted:
@@ -215,13 +218,16 @@ class _Run:
         if _normal(value) != self.initial:
             raise ValueError('Normal same-source identity or physical port changed')
         self.returned = True
-        self.store.event('NORMAL_SAME_SOURCE_MATCH_MODELED')
+        self.event('NORMAL_SAME_SOURCE_MATCH_MODELED')
 
-    def body(self, resources):
+    def preflight(self, resources):
         maximum = (self.stock.ap_bytes + self.stock.cp_bytes + 4 * bk4.MAX_SNAPSHOT
                    + (68 * c.MAX_RESOURCE if resources else 0) + EVENTS_LIMIT * 16384 + 131072)
         self.store.require_space(maximum)
-        self.store.event('SYNTHETIC_LOCK_ORDER', global_lock_modeled=True, real_global_lock_acquired=False)
+        self.event('SYNTHETIC_LOCK_ORDER', global_lock_modeled=True, real_global_lock_acquired=False)
+
+    def body(self, resources):
+        self.preflight(resources)
         value = self.call('normal-before', self.peer.normal)
         self.normal_open = True
         self.initial = _normal(value)
@@ -241,6 +247,9 @@ class _Run:
         for name in ('auth-service-start', 'auth-service-verify'):
             self.call(name, lambda n=name: self.peer.step(n))
         self.stage = 'C2'
+        self.materials(resources)
+
+    def materials(self, resources):
         self.receive('hasp')
         self.guards()
         for name, size, digest in (('appFw.so', self.stock.ap_bytes, self.stock.ap_sha),

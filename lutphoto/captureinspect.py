@@ -18,7 +18,8 @@ from .customcontracts import RESOURCE_FILES
 MIB = 1024 * 1024
 FOLDERS = ('source', 'evidence', 'resources', 'events')
 REPORTS = {'capture-report.private.json': ('host', 'a7c2-synthetic-host-capture-report/1', 'SIMULATED_HOST_CAPTURE_COMPLETE'),
-           'session-report.private.json': ('session', 'a7c2-synthetic-session-coordination/1', 'SIMULATED_SESSION_COMPLETE')}
+           'session-report.private.json': ('session', 'a7c2-synthetic-session-coordination/1', 'SIMULATED_SESSION_COMPLETE'),
+           'pipeline-report.private.json': ('pipeline', 'a7c2-synthetic-authenticated-capture/1', 'SIMULATED_AUTHENTICATED_CAPTURE_COMPLETE')}
 CORE = ('source/appFw.so', 'source/cpapp-b.bin', 'source/settings-ram.bin', 'source/settings-saved.bin',
         'evidence/settings-ram-end.bin', 'evidence/settings-saved-end.bin')
 MATERIALS = {n: 128 * MIB if n.endswith(('.so', '.bin')) and n in CORE[:2] else 32 * MIB for n in CORE}
@@ -36,12 +37,15 @@ FALSE_PROFILE = {'host': {'camera_operations_enabled', 'container_complete_backu
 EXTRA_PROFILE = {'host': {'host_files_integrity_checked', 'simulated_service_exit_confirmed',
     'simulated_service_still_active', 'simulated_normal_observation_matched', 'resource_extension_requested', 'resource_count'},
     'session': {'simulated_transition_started', 'simulated_service_stop_ack', 'simulated_normal_identity_matched', 'accepted_wire_bytes', 'requests'}}
+FALSE_PROFILE['pipeline'] = FALSE_PROFILE['session'] | {'actual_authentication_verified', 'fresh_normal_observation_verified', 'resume_allowed'}
+PIPELINE_COUNTERS = {'accepted_auth_bytes', 'accepted_total_bytes', 'auth_raw_calls'}
+EXTRA_PROFILE['pipeline'] = EXTRA_PROFILE['session'] | PIPELINE_COUNTERS | {'authentication_phase', 'shared_budget_modeled', 'pipeline_blocked'}
 COMMON = {'schema', 'private_report', 'simulation_only', 'phase', 'reason_type', 'last_stage',
     'simulated_outcome_unknown', 'program_content_matched_in_rehearsal', 'files', 'accepted_payload_bytes',
     'journal_records', 'journal_head_sha256', 'commit', 'archive_sha256'}
 EVENTS = {'INTENT', 'ACK', 'STAGE', 'HOST_FILE_VERIFIED', 'SNAPSHOT_FORMAT_CHECKED', 'SYNTHETIC_PREFLIGHT',
     'PROGRAM_CONTENT_MATCHED', 'OBSERVATIONS_COMPLETE', 'NORMAL_OBSERVATION_MATCHED', 'SYNTHETIC_LOCK_ORDER',
-    'GUARD_ABSENCE_MODELED', 'NORMAL_SAME_SOURCE_MATCH_MODELED', 'READY_FOR_REPORT', 'NEEDS_REVIEW'}
+    'GUARD_ABSENCE_MODELED', 'NORMAL_SAME_SOURCE_MATCH_MODELED', 'READY_FOR_REPORT', 'NEEDS_REVIEW', 'RAW_AUTHENTICATION_MODELED'}
 
 
 class _Refused(ValueError):
@@ -197,10 +201,15 @@ class _Evidence:
         self.pending, self.acks, self.events, self.verified = {}, [], [], {}
         self.actual, self.count, self.head = {}, 0, '0' * 64
         self.orphans, self.unknown = 0, False
+        self.raw_auth_markers = 0
 
     def details_valid(self, event, details):
         if event in ('OBSERVATIONS_COMPLETE', 'NORMAL_OBSERVATION_MATCHED', 'NORMAL_SAME_SOURCE_MATCH_MODELED', 'READY_FOR_REPORT'):
             return not details
+        if event == 'RAW_AUTHENTICATION_MODELED':
+            return (set(details) == {'accepted_auth_bytes', 'raw_calls'}
+                and type(details['accepted_auth_bytes']) is int and details['accepted_auth_bytes'] == 14448
+                and type(details['raw_calls']) is int and details['raw_calls'] == 30)
         if event == 'STAGE': return set(details) == {'stage'} and details['stage'] in ('C1', 'C2', 'C5')
         if event == 'PROGRAM_CONTENT_MATCHED': return details == {'kind': 'stock'}
         if event == 'SYNTHETIC_LOCK_ORDER':
@@ -257,6 +266,10 @@ class _Evidence:
                     self.problem('INVALID_MATERIAL_RECORD', contradiction=True); break
                 if file in self.verified: self.problem('DUPLICATE_MATERIAL_RECORD', contradiction=True)
                 self.verified[file] = expected
+            elif event == 'RAW_AUTHENTICATION_MODELED':
+                self.raw_auth_markers += 1
+                if self.pending or self.acks != _ack_plan('pipeline', False)[:6] or self.raw_auth_markers != 1:
+                    self.problem('RAW_AUTH_MARKER_OUT_OF_ORDER', contradiction=True)
             elif event == 'NEEDS_REVIEW':
                 if (set(details) != {'reason_type', 'outcome_unknown'}
                         or type(details.get('outcome_unknown')) is not bool
@@ -299,15 +312,25 @@ class _Evidence:
                 or report['reason_type'] is not None and (type(report['reason_type']) is not str or len(report['reason_type']) > 128)):
             self.problem('INVALID_REPORT_METADATA', contradiction=True)
         boolean = {'simulated_outcome_unknown', 'program_content_matched_in_rehearsal'}
-        boolean |= EXTRA_PROFILE[profile] - ({'resource_count'} if profile == 'host' else {'accepted_wire_bytes', 'requests'})
+        nonboolean = {'resource_count'} if profile == 'host' else {'accepted_wire_bytes', 'requests'}
+        if profile == 'pipeline': nonboolean |= PIPELINE_COUNTERS | {'authentication_phase'}
+        boolean |= EXTRA_PROFILE[profile] - nonboolean
         if any(type(report[k]) is not bool for k in boolean):
             self.problem('INVALID_REPORT_FLAGS', contradiction=True)
         if (type(report['journal_records']) is not int or report['journal_records'] != self.count
                 or report['journal_head_sha256'] != self.head):
             self.problem('REPORT_JOURNAL_DIFFERS', contradiction=True)
-        for counter in {'accepted_payload_bytes'} | ({'accepted_wire_bytes', 'requests'} if profile == 'session' else set()):
+        counters = {'accepted_payload_bytes'} | ({'accepted_wire_bytes', 'requests'} if profile != 'host' else set())
+        if profile == 'pipeline': counters |= PIPELINE_COUNTERS
+        for counter in counters:
             if type(report[counter]) is not int or not 0 <= report[counter] <= 2**31:
                 self.problem('INVALID_REPORT_COUNTER', contradiction=True)
+        if profile == 'pipeline':
+            if (report['authentication_phase'] not in ('NOT_STARTED','NEW','NORMAL_CONTROL_RETURNED','WAIT_SERVICE',
+                    'SERVICE_CONTROL_RETURNED','SERVICE_AUTHENTICATED','STOP_CONTROL_RETURNED','SYNTHETIC_RETURN_MATCHED','NEEDS_REVIEW')
+                    or report['accepted_auth_bytes'] > 32768 or report['auth_raw_calls'] > 31
+                    or report['accepted_total_bytes'] != report['accepted_payload_bytes'] + report['accepted_auth_bytes']):
+                self.problem('INVALID_AUTHENTICATION_ACCOUNTING', contradiction=True)
         files = report['files']
         if type(files) is not dict or any(type(n) is not str or n not in MATERIALS or not _info(v) for n, v in files.items()):
             self.problem('INVALID_REPORT_MATERIALS', contradiction=True); files = {}
@@ -326,10 +349,10 @@ class _Evidence:
                 and report['last_stage'] == 'C5' and self.events and self.events[-1] == 'READY_FOR_REPORT'
                 and self.acks == _ack_plan(profile, resources)
                 and self.events.count('SNAPSHOT_FORMAT_CHECKED') == 4 and 'NEEDS_REVIEW' not in self.events
-                and ('SYNTHETIC_PREFLIGHT' not in self.events if profile == 'session' else 'SYNTHETIC_LOCK_ORDER' not in self.events))
+                and ('SYNTHETIC_PREFLIGHT' not in self.events if profile != 'host' else 'SYNTHETIC_LOCK_ORDER' not in self.events))
             repeated = set(CORE[:2]) | {n for n in expected if n.startswith('resources/')}
             payload = sum(info['bytes'] * (2 if n in repeated else 1) for n, info in self.actual.items())
-            prerequisites &= report['accepted_payload_bytes'] == payload + (88 if profile == 'session' else 0)
+            prerequisites &= report['accepted_payload_bytes'] == payload + (88 if profile != 'host' else 0)
             if profile == 'host':
                 prerequisites &= (report['host_files_integrity_checked'] is True
                     and report['simulated_service_exit_confirmed'] is True
@@ -349,6 +372,13 @@ class _Evidence:
                     and self.events.count('SYNTHETIC_LOCK_ORDER') == 1
                     and report['requests'] == sum(op in ('hasp', 'ram', 'saved') or op.startswith(('read:', 'select:')) for op in self.acks)
                     and report['accepted_wire_bytes'] >= report['accepted_payload_bytes'] + 24 * report['requests'])
+            if profile == 'pipeline':
+                prerequisites &= (report['accepted_auth_bytes'] == 14448 and report['auth_raw_calls'] == 31
+                    and report['authentication_phase'] == 'SYNTHETIC_RETURN_MATCHED'
+                    and report['shared_budget_modeled'] is True and report['pipeline_blocked'] is False
+                    and self.raw_auth_markers == 1)
+            else:
+                prerequisites &= self.raw_auth_markers == 0
             if not prerequisites or self.issues:
                 self.problem('COMPLETE_REPORT_WITH_INCOMPLETE_EVIDENCE', contradiction=True)
         else:
@@ -360,7 +390,7 @@ def _result(classification, evidence=None, refusal=None):
     return {'schema': 'a7c2-readonly-synthetic-capture-inspection/1', 'private_report': True,
         'classification': classification, 'inspection_only': True, 'simulation_only': True,
         'camera_operations_performed': False, 'actual_source_identity_verified': False,
-        'body_binding_verified': False, 'physical_protocol_verified': False, 'chip_roles_verified': False,
+        'body_binding_verified': False, 'physical_protocol_verified': False, 'actual_authentication_verified': False, 'chip_roles_verified': False,
         'snapshot_freshness_verified': False, 'independent_media_verified': False,
         'program_policy_revalidated': False, 'material_formats_revalidated': False,
         'restore_verified': False, 'write_plan_enabled': False, 'resume_allowed': False,
