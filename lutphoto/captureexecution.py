@@ -1,12 +1,13 @@
-"""Internal native capture assembly; no public device entry or device CLI.
+"""Internal native capture assembly used by the explicit camera frontend.
 
-Uses the existing host/protocol/owner core, not a second transport. Public
+Uses the existing host/protocol/owner core, not a second transport. Legacy
 capturecandidate.capture still refuses unconditionally. Tests replace only
 the existing native SDK/system surfaces. QAQLeonard/ma1co/ajalt provenance:
 ACKNOWLEDGEMENTS.md. No SDK import, signals or locks at module import time.
 """
 import re
 import secrets
+from dataclasses import dataclass
 
 from . import captureowned as o, capturepreflight, bk4
 from .capturecontrol import Cancellation
@@ -162,12 +163,19 @@ def _execute(archive,directory,host,channel,policy,*,resources,firmware,battery_
     return receipt
 
 
-def _capture(archive,directory,*,firmware,battery_percent,resources=False):
-    """Reserved native assembly; the public entry remains unconditionally shut.
+@dataclass(frozen=True)
+class _Prepared:
+    archive: object
+    directory: object
+    firmware: str
+    battery_percent: int
+    resources: bool
+    policy: object
+    channel: object
 
-    Preparation is source/local-only and precedes constructing NativeOps.
-    Never call this private function to bypass the public readiness boundary.
-    """
+
+def _prepare(archive,directory,*,firmware,battery_percent,resources=False):
+    """Source/local checks before output reservation or NativeOps construction."""
     if (type(firmware) is not str or firmware!='2.01' or type(battery_percent) is not int
             or not 50<=battery_percent<=100 or type(resources) is not bool):
         raise ValueError('Supported firmware and actual battery required')
@@ -177,7 +185,20 @@ def _capture(archive,directory,*,firmware,battery_percent,resources=False):
     policy=o.programidentity._load_policy(archive)
     channel=o.OfflineChannel(archive,resources=resources,guards=True)
     channel.budget=Budget(channel.budget.limit+o.p.AUTH_ALLOWANCE+o.IDENTITY_ALLOWANCE)
+    return _Prepared(archive,directory,firmware,battery_percent,resources,policy,channel)
+
+
+def _run(prepared):
+    """The single fixed native assembly; no injected ops, runner or clock."""
+    if type(prepared) is not _Prepared:raise TypeError('Internal preparation required')
     token=Cancellation();ops=o.m._NativeOps()
-    host=o.m._Host(ops,None,firmware=firmware,battery_percent=battery_percent,budget=channel.budget,cancel=token,wait=True)
-    return _execute(archive,directory,host,channel,policy,resources=resources,firmware=firmware,
-                    battery_percent=battery_percent,execution_kind='native')
+    host=o.m._Host(ops,None,firmware=prepared.firmware,battery_percent=prepared.battery_percent,
+                   budget=prepared.channel.budget,cancel=token,wait=True)
+    return _execute(prepared.archive,prepared.directory,host,prepared.channel,prepared.policy,
+                    resources=prepared.resources,firmware=prepared.firmware,
+                    battery_percent=prepared.battery_percent,execution_kind='native')
+
+
+def _capture(archive,directory,*,firmware,battery_percent,resources=False):
+    """Internal convenience wrapper; public device calls use capturecamera."""
+    return _run(_prepare(archive,directory,firmware=firmware,battery_percent=battery_percent,resources=resources))

@@ -26,15 +26,15 @@
 
 ## LUT 照片开发进度
 
-已提供独立的[机外 LUT 参考工具](research/README.md)。近期主线是上游 v2.1 的原生 Creative Look 拟合：[N1 固定源码审计](docs/UPSTREAM-V2.1-AUDIT.md)完成，N2 的[拟合/预测](docs/NATIVE-FIT-OFFLINE.md)及[配对标定/冻结验收](docs/NATIVE-VALIDATION.md)离线工具已具备，真实 ST 与相机精度仍待 N4 验证。N3 已有来源/ABI、资源/设置、日志/进程锁和 BK4 离线检查；第三十七轮新增[完整 AP/CP 身份及描述符入口](docs/PROGRAM-IDENTITY.md)，第三十八轮接通[描述符与 RAM/保存快照的只读绑定](docs/SETTINGS-BINDING.md)。第三十九轮连接[原生表/名称资源与私人输入清单](docs/IMPORT-MATERIALS.md)，资源逆向仅在内存验证。正例仅使用自制材料，真实程序/BK4/资源兼容、新鲜同机身来源和完整事务仍缺，尚未接入写入、恢复或 USB/全局相机锁。
+主线是上游v2.1的原生Creative Look拟合。N1[固定源码审计](docs/UPSTREAM-V2.1-AUDIT.md)完成；N2[拟合/预测](docs/NATIVE-FIT-OFFLINE.md)和[配对标定/冻结验收](docs/NATIVE-VALIDATION.md)离线工具已具备，真实ST与相机精度仍待N4。N3已有完整程序/描述符、设置/资源及来源检查；[公开首次内部采集入口](docs/CAPTURE-FIRST-USE.md)已接通固定读取、独占/信号收尾和独立回执，**只用自制SDK/材料完成离线验证，尚无本项目首次真机采集正例**。它不是LUT安装器，写入/事务/worker/恢复仍未接通。
 
-内部材料采集已有[设计](docs/CAPTURE-DESIGN.md)、[固定协议](docs/CAPTURE-PROTOCOL-OFFLINE.md)和[统一离线协调器](docs/CAPTURE-PIPELINE-OFFLINE.md)。第四十八轮的[受限原始接口](docs/CAPTURE-RAW-OFFLINE.md)让认证/材料/退出共用同一模拟服务对象；第四十九轮新增独立的[Mac 宿主生命周期与 MSC 身份查询代码](docs/CAPTURE-MAC-OFFLINE.md)，在假系统上验证卸载/接管/释放及新开普通句柄查询同来源身份。第五十轮已用[统一离线装配](docs/CAPTURE-OWNED-OFFLINE.md)连接宿主、两次 MSC 查询、认证、同服务句柄材料/退出和 Store；[只读检查器](docs/CAPTURE-INSPECTION.md)新增第四种证据格式。第五十一轮补充[有界重枚举、取消及只读预检](docs/CAPTURE-CONTROL-PREFLIGHT.md)，区分等待结束和协议未知；预检只检查电脑端材料/环境/新输出位置。第五十二轮提供[原生协调候选与首次采集清单](docs/CAPTURE-NATIVE-CANDIDATE.md)，协调器去除模拟到达接口依赖，增加仅源码审阅命令；真实采集入口仍关闭。演练只接受精确假系统；真实 SDK 管理不可抢占、系统锁、重枚举/协议轮廓/排空和新鲜同机材料尚未验证。第五十三轮在[假 SDK/系统接口上执行现有 Mac 适配方法](docs/CAPTURE-NATIVE-OFFLINE.md)，补齐组合验证并修正重复释放及锁错误遮盖；仍未操作真实 SDK/相机。第五十四轮补充[显式信号取消与现场保留](docs/CAPTURE-SIGNALS-OFFLINE.md)，仅在自制子进程验证，现有入口不自动安装信号处理器。第五十五轮完成[首次采集最终离线审阅](docs/CAPTURE-READINESS-REVIEW.md)，整理共用所有权核心，明确实际入口、真实证据及调用终态仍缺实现；后续按完整交付推进。第五十六轮接通[内部采集证据与调用回执](docs/CAPTURE-EVIDENCE.md)，分别核对材料与全部收尾；独立只读检查器可用，公开设备命令仍关闭。首版设备设计仍限定精确原厂 2.01 固定读取，不加载原生模块；离线开发不要求现在升级相机。
+首次采集只支持本人ILCE-7CM2原厂2.01及固定完整AP/CP指纹，要求实际版本/电量、管理员权限和新私人输出；服务认证/选读路径会改变临时状态，不加载模块或写程序/保存设置。材料检查点、内部终态、回执传递及CLI退出分开判断，见[证据/回执](docs/CAPTURE-EVIDENCE.md)。候选review仍是无设备操作的源码审阅，不能改JSON当采集许可。当前本人相机保留2.00，卡副本不是内部备份，不需现在升级/连接或读移动盘；实采前另提示。
 
-任意 3D LUT 的 M2–M4 保留为研究支线，运行配置、有效传输、句柄/MAIN 身份和时序仍未闭合。旧 FL2/FL3 锁和安装器保持原样；相机实测后置，进入前提示，目前无需连接相机。总状态见[里程碑表](plan.md)，继续任务读[当前交接](research/HANDOFF.md)，历史成果见[轮次索引](research/ROUNDS.md)。
+任意3D LUT的M2–M4保留研究支线，动态配置、有效传输、MAIN身份/时序未闭合，不视为通向完整JPEG的证明。旧FL2/FL3锁/安装器保持原样。总状态见[四列里程碑](plan.md)，后续工作读[当前交接](research/HANDOFF.md)，历史证据查[轮次索引](research/ROUNDS.md)。
 
 ## 先确认设备和版本
 
-尚未做过备份，或当前是原厂 Ver.2.00，先看[日常备份与官方升级说明](docs/BACKUP-GUIDE.md)：先保存照片/菜单设置，决定更新时使用索尼官方 Ver.2.01；卡文件副本不能代替内部开发备份。当前没有独立的仅备份命令，不要用下文 `prepare` 给不支持的版本试采集。升级成功仍需完整程序指纹检查。
+尚未做过备份，或当前是原厂 Ver.2.00，先看[日常备份与官方升级说明](docs/BACKUP-GUIDE.md)：先保存照片/菜单设置，决定更新时使用索尼官方 Ver.2.01；卡文件副本不能代替内部开发备份。内部开发材料另用[首次采集入口](docs/CAPTURE-FIRST-USE.md)，它只支持原厂2.01且尚未真机验证；不要用下文 `prepare` 给不支持的版本试采集。升级成功仍需完整程序指纹检查。
 
 | 需要什么 | 要求 |
 | --- | --- |

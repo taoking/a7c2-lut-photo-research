@@ -6,6 +6,7 @@ is normalized only inside the checker; reports are independent of simulations.
 See ACKNOWLEDGEMENTS.md for QAQLeonard/ma1co/ajalt source provenance.
 """
 import argparse
+import fcntl
 import hashlib
 import json
 import os
@@ -188,6 +189,8 @@ def _read_receipt(path):
     fd=None
     try:
         fd=os.open(path.name,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK,dir_fd=parent)
+        try:fcntl.flock(fd,fcntl.LOCK_SH|fcntl.LOCK_NB)
+        except BlockingIOError:raise i._Refused('ACTIVE_RECEIPT') from None
         before=os.fstat(fd);i._private(before)
         if not 0<before.st_size<=131072:raise ValueError('Bounded receipt required')
         raw=bytearray()

@@ -1,6 +1,6 @@
 # 进程中断、合作式取消与现场保留
 
-第五十四轮新增[显式信号作用域](../lutphoto/capturesignals.py)，配合既有Cancellation和[Mac适配候选](CAPTURE-NATIVE-OFFLINE.md)。真实信号只发送给自制测试子进程，固定材料演练另核对显式安装/还原，没有实际SDK、USB、系统相机锁或设备操作。**真实采集入口仍关闭，没有新增相机命令。**
+第五十四轮新增[显式信号作用域](../lutphoto/capturesignals.py)，配合既有Cancellation和[Mac适配候选](CAPTURE-NATIVE-OFFLINE.md)。真实信号只发送给自制测试子进程，固定材料演练另核对显式安装/还原，没有实际SDK、USB、系统相机锁或设备操作。第五十七轮已接入独立[首次采集命令](CAPTURE-FIRST-USE.md)，仍仅离线验收；本页历史演练和源码review不因此自动操作设备。
 
 ## 安装与处理范围
 
@@ -48,3 +48,5 @@ Python信号处理函数只赋值一个布尔标志，不调用Event.set/cancel�
 当前保留原厂Ver.2.00和日常卡副本，不需升级、连接相机或读取移动盘。未来实际采集仍限定ILCE-7CM2原厂2.01和匹配完整程序指纹，进入前另提示范围并取得真实版本/电量/连接配合；卡副本不是内部开发备份或可降级证据。
 
 第五十六轮已将作用域接入[内部原生装配与调用回执](CAPTURE-EVIDENCE.md)，在既有假SDK上验证正文、stop及dispose中的真实自制子进程信号；回执在还原和最后取消检查后产生。公开设备入口仍关闭，原演练/review不自动安装处理器，实际SDK与机身边界未证。
+
+第五十七轮另用公开capture API运行相同四场景（配置SIGINT、材料SIGTERM、stop SIGTERM、dispose SIGINT），没有新传输模型。假SDK未返回时，所有者/作业/租约及新回执独占锁均保留；只读检查分别拒绝ACTIVE_JOB/ACTIVE_RECEIPT。返回后不追加协议，收尾/处理器还原后才保存失败回执；四种结果均非成功。加上候选与内部装配，完整测试共12个真实自制子进程信号场景，未向实际SDK或相机发送信号。

@@ -22,16 +22,23 @@ def emit(value):print(json.dumps(value,sort_keys=True),flush=True)
 
 def main():
     allowed=('configuration','material','stop','dispose')
-    if len(sys.argv)!=3 or sys.argv[1] not in allowed+tuple('execution-'+n for n in allowed):
+    if len(sys.argv)!=3 or sys.argv[1] not in allowed+tuple(prefix+n for prefix in ('execution-','public-') for n in allowed):
         raise ValueError('Fixed own child scenario required')
     scenario,directory=sys.argv[1:]
-    execution=scenario.startswith('execution-');scenario=scenario.removeprefix('execution-')
-    f=fixtures.OwnedTests(methodName='runTest');f.setUp()
-    token=Cancellation();world=World(f.system());blocked=False;returned=threading.Event();monitor=None
+    execution=scenario.startswith('execution-');public=scenario.startswith('public-')
+    scenario=scenario.removeprefix('execution-').removeprefix('public-')
+    if public:
+        from research.tests.test_capturecamera import CameraTests
+        f=CameraTests(methodName='runTest')
+    else:f=fixtures.OwnedTests(methodName='runTest')
+    f.setUp()
+    token=Cancellation();world=World(f.fixture.system() if public else f.system());blocked=False;returned=threading.Event();monitor=None
     import signal
     previous={n:signal.getsignal(n) for n in (signal.SIGINT,signal.SIGTERM)}
     try:
         def state(phase):
+            nonlocal token
+            if public:token=world.host.cancel
             owner=world.host.owners[-1]
             return {'phase':phase,'lease_held':world.system.acquired,'owner_retained':owner in world.host.owners,
                     'views_invalidated':owner.closed,'sdk_returned':returned.is_set(),
@@ -78,19 +85,28 @@ def main():
                 return result
             point=patch.object(Util,'dispose_resources',hook)
         with point:
-            if execution:
-                _,policy,channel=o._prepare('own',world.system,False,token)
-                world.system.service_device._requests=channel.requests
-                world.host=o.m._Host(world.ops,None,firmware='2.01',battery_percent=75,budget=channel.budget,cancel=token,wait=True)
-                with world.bound():
-                    result=captureexecution._execute('own',directory,world.host,channel,policy,resources=False,
-                        firmware='2.01',battery_percent=75,execution_kind='self-made-sdk')
+            if execution or public:
+                if public:
+                    from pathlib import Path
+                    from lutphoto import capturecamera
+                    receipt=Path(directory).with_name(Path(directory).name+'-terminal.private.json')
+                    execute=captureexecution._execute
+                    def host_bound(*args,**kwargs):world.host=args[2];return execute(*args,**kwargs)
+                    with f.bound(world),patch.object(captureexecution,'_execute',host_bound):
+                        result=capturecamera.capture('own',directory,receipt,model='ILCE-7CM2',firmware='2.01',battery_percent=75)
+                else:
+                    _,policy,channel=o._prepare('own',world.system,False,token)
+                    world.system.service_device._requests=channel.requests
+                    world.host=o.m._Host(world.ops,None,firmware='2.01',battery_percent=75,budget=channel.budget,cancel=token,wait=True)
+                    with world.bound():
+                        result=captureexecution._execute('own',directory,world.host,channel,policy,resources=False,
+                            firmware='2.01',battery_percent=75,execution_kind='self-made-sdk')
                 from pathlib import Path
                 checkpoint=json.loads((Path(directory)/captureevidence.CHECKPOINT).read_bytes())
                 reason=result['errors'][0]['reason_type'];stop=checkpoint['flow']['service_stop_ack']
                 matched=checkpoint['flow']['normal_identity_matched'];flags=all(v is False for v in result['unproven'].values())
                 restored=result['cleanup']['signal_handlers']=='CONFIRMED'
-                classification=captureevidence.inspect_directory(directory)['classification']
+                classification=captureevidence.inspect_directory(directory,receipt=receipt if public else None)['classification']
             else:
                 with SignalCancellation(token) as scope:result=world.run('own',directory,cancel=token)
                 reason=result['reason_type'];stop=result['simulated_service_stop_ack'];matched=result['simulated_normal_identity_matched']

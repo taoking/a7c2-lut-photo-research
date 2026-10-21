@@ -64,3 +64,5 @@ USB 服务协议来自 [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-R
 第五十四轮[信号取消与现场保留](docs/CAPTURE-SIGNALS-OFFLINE.md)由本项目编写，沿用QAQLeonard/ma1co/ajalt既有协议来源和许可；使用Python标准库及自制子进程验证，不复制/执行归档或USB运行库，不发布认证材料或机身数据，不构成实际SDK/相机验证。
 
 第五十六轮[内部采集装配与独立证据](docs/CAPTURE-EVIDENCE.md)由本项目编写，继续复用QAQLeonard/ma1co/ajalt固定来源及既有许可；未复制或执行归档/USB运行库，不分发密钥、程序或机身材料。新增图检查/收尾回执及自制子进程验证不构成实际SDK或相机验收。
+
+第五十七轮[公开首次采集入口与私有回执传递](docs/CAPTURE-FIRST-USE.md)由本项目编写，复用上述固定来源及同一内部装配，保留QAQLeonard/ma1co/ajalt署名与许可。固定来源故障演练和公开入口信号测试仍只用自制SDK/系统/材料，不分发密钥、程序、身份或私人记录，不构成首次真机采集或恢复验证。
