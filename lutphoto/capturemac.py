@@ -1,0 +1,406 @@
+"""Internal macOS ownership binding, exercised only with injected fake APIs.
+
+QAQLeonard/ma1co source provenance: capturemsc and ACKNOWLEDGEMENTS.md.
+No public live entry or capture CLI. Importing this module does no host I/O.
+"""
+import fcntl
+import os
+import plistlib
+import re
+import selectors
+import stat
+import subprocess
+import sys
+import time
+from dataclasses import dataclass
+
+from .capturemsc import _Query
+from .capturestore import Budget
+
+LOCK = '/var/run/a7c2-fl23-macos.lock'  # Same exclusion domain as the old installer.
+NORMAL, SERVICE = 0x0e8a, 0x0336
+DISK = re.compile(r'disk[0-9]+(?:s[0-9]+)*\Z')
+
+
+@dataclass(frozen=True)
+class _Key:
+    pid: int
+    bus: int
+    ports: tuple
+    address: int
+
+    def __post_init__(self):
+        if (type(self.pid) is not int or self.pid not in (NORMAL,SERVICE)
+                or type(self.bus) is not int or self.bus<=0
+                or type(self.ports) is not tuple or not 1<=len(self.ports)<=16
+                or any(type(p) is not int or not 1<=p<=255 for p in self.ports)
+                or type(self.address) is not int or not 1<=self.address<=127):
+            raise ValueError('Explicit USB location required')
+
+    @property
+    def location(self):return self.bus,self.ports
+
+
+def _bounded_command(argv, seconds, limit=8*1024*1024):
+    """Fixed callers only; bound combined output while reading, not afterwards."""
+    end=time.monotonic()+seconds
+    process=subprocess.Popen(argv,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+    try:
+        result=bytearray()
+        with selectors.DefaultSelector() as selector:
+            selector.register(process.stdout,selectors.EVENT_READ)
+            while True:
+                remaining=end-time.monotonic()
+                if remaining<=0:raise TimeoutError('Host command deadline expired')
+                if not selector.select(remaining):raise TimeoutError('Host command deadline expired')
+                part=os.read(process.stdout.fileno(),min(65536,limit+1-len(result)))
+                if not part:break
+                result.extend(part)
+                if len(result)>limit:raise ValueError('Host command output exceeded bound')
+        code=process.wait(timeout=max(0.001,end-time.monotonic()))
+        if code:raise OSError('Host command failed')  # Never expose command output/paths.
+        return bytes(result)
+    finally:
+        if process.poll() is None:process.kill()
+        process.wait();process.stdout.close()
+
+
+def _walk(tree):
+    pending=[tree];count=0
+    while pending:
+        value=pending.pop();count+=1
+        if count>100000:raise ValueError('Registry node bound exceeded')
+        if type(value) is list:pending.extend(value)
+        elif type(value) is dict:
+            yield value
+            children=value.get('IORegistryEntryChildren',[])
+            if type(children) is not list:raise ValueError('Invalid registry children')
+            pending.extend(children)
+
+
+class _NativeOps:
+    """Unwired native API binding. No constructors/imports enumerate USB.
+
+    Tests replace runtime/commands. No caller in shipped tools instantiates this
+    class; real opening/claiming still needs explicit device-flow integration.
+    """
+    clock=staticmethod(time.monotonic)
+    sleep=staticmethod(time.sleep)
+
+    def _runtime(self):
+        import sys
+        if sys.platform!='darwin' or os.geteuid()!=0:raise PermissionError('macOS administrator context required')
+        import usb.core
+        import usb.util
+        return usb.core,usb.util
+
+    def acquire(self):
+        if sys.platform!='darwin' or os.geteuid()!=0:raise PermissionError('macOS administrator lock required')
+        fd=os.open(LOCK,os.O_RDWR|os.O_CREAT|os.O_NOFOLLOW|os.O_NONBLOCK,0o600)
+        try:
+            info=os.fstat(fd)
+            if not stat.S_ISREG(info.st_mode) or info.st_uid!=0 or info.st_nlink!=1 or info.st_mode&0o077:
+                raise ValueError('Unsafe global camera lock')
+            fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            return fd
+        except BaseException:
+            os.close(fd);raise
+
+    def unlock(self,fd):os.close(fd)  # No unlink/replacement and no authentication changes.
+
+    def command(self,args,seconds):
+        allowed=(args==('/usr/sbin/ioreg','-p','IOService','-l','-a')
+                 or len(args)==4 and args[:3]==('/usr/sbin/diskutil','info','-plist') and DISK.fullmatch(args[3])
+                 or len(args)==3 and args[:2]==('/usr/sbin/diskutil','unmountDisk') and re.fullmatch(r'/dev/disk[0-9]+',args[2]))
+        if not allowed:raise ValueError('Fixed non-forced host commands only')
+        if type(seconds) not in (int,float) or not 0<seconds<=20:raise ValueError('Bounded command duration required')
+        return _bounded_command(args,seconds)
+
+    def media(self,seconds):
+        end=self.clock()+seconds
+        def command(args):
+            remaining=end-self.clock()
+            if remaining<=0:raise TimeoutError('Media query deadline expired')
+            return self.command(args,min(20,remaining))
+        tree=plistlib.loads(command(('/usr/sbin/ioreg','-p','IOService','-l','-a')))
+        targets=[v for v in _walk(tree) if v.get('IOObjectClass')=='IOUSBHostDevice'
+                 and v.get('idVendor')==0x054c and v.get('idProduct')==NORMAL]
+        if len(targets)!=1 or type(targets[0].get('IORegistryEntryID')) is not int:raise ValueError('Unique registry target required')
+        media={}
+        for value in _walk(targets[0]):
+            if value.get('IOObjectClass')!='IOMedia':continue
+            name=value.get('BSD Name')
+            if type(name) is not str or not DISK.fullmatch(name) or name in media:raise ValueError('Unique disk identifier required')
+            if len(media)>=64:raise ValueError('Media count bound exceeded')
+            info=plistlib.loads(command(('/usr/sbin/diskutil','info','-plist',name)))
+            if (info.get('DeviceIdentifier')!=name or info.get('Internal') is not False
+                    or info.get('OSInternalMedia') is not False or info.get('BusProtocol')!='USB'
+                    or type(info.get('WholeDisk')) is not bool):raise ValueError('Verified external USB media required')
+            media[name]=(info.get('ParentWholeDisk'),info['WholeDisk'],bool(info.get('MountPoint')))
+        if not media or any(parent not in media or media[parent][1] is not True
+                            or whole and parent!=name for name,(parent,whole,_) in media.items()):
+            raise ValueError('Verified whole camera disks required')
+        return targets[0]['IORegistryEntryID'],media
+
+    def unmount(self,disk,seconds):return self.command(('/usr/sbin/diskutil','unmountDisk','/dev/'+disk),seconds)
+
+    def _devices(self):
+        core,util=self._runtime();devices=[]
+        try:
+            for pid in (NORMAL,SERVICE):
+                for device in core.find(find_all=True,idVendor=0x054c,idProduct=pid):
+                    devices.append(device)
+                    if len(devices)>16:raise ValueError('USB inventory bound exceeded')
+            return devices,util
+        except BaseException:
+            self._dispose_all(util,devices,suppress=True)
+            raise
+
+    @staticmethod
+    def _dispose_all(util,devices,*,suppress=False):
+        error=None
+        for device in devices:
+            try:
+                if util.dispose_resources(device) is not None:raise ValueError('Unconfirmed enumeration disposal')
+            except BaseException as exc:
+                if error is None:error=exc
+        if error is not None and not suppress:raise error
+
+    @staticmethod
+    def key(device):
+        if device.idVendor!=0x054c:raise ValueError('Sony identity required')
+        return _Key(device.idProduct,device.bus,tuple(device.port_numbers or ()),device.address)
+
+    def inventory(self):
+        devices,util=self._devices()
+        try:result=tuple(self.key(d) for d in devices)
+        except BaseException:
+            self._dispose_all(util,devices,suppress=True);raise
+        self._dispose_all(util,devices);return result
+
+    def open(self,key):
+        devices,util=self._devices();selected=None
+        try:
+            matches=[d for d in devices if self.key(d)==key]
+            if len(devices)!=1 or len(matches)!=1:raise ValueError('Fresh unique device required')
+            selected=matches[0]
+            return selected
+        finally:
+            self._dispose_all(util,[d for d in devices if d is not selected],suppress=selected is None)
+
+    def descriptor(self,device):
+        interface=device.get_active_configuration()[(0,0)]
+        return (device.idVendor,device.idProduct,interface.bInterfaceNumber,interface.bAlternateSetting,
+                interface.bInterfaceClass,interface.bInterfaceSubClass,interface.bInterfaceProtocol,
+                tuple((ep.bEndpointAddress,ep.bmAttributes) for ep in interface))
+
+    def active(self,d):return d.is_kernel_driver_active(0)
+    def detach(self,d):return d.detach_kernel_driver(0)
+    def attach(self,d):return d.attach_kernel_driver(0)
+    def claim(self,d):return self._runtime()[1].claim_interface(d,0)
+    def release(self,d):return self._runtime()[1].release_interface(d,0)
+    def dispose(self,d):return self._runtime()[1].dispose_resources(d)
+    def write(self,d,ep,data,timeout):return d.write(ep,data,timeout=timeout)
+    def read(self,d,ep,size,timeout):return d.read(ep,size,timeout=timeout)
+
+
+def _profile(value,pid):
+    if (type(value) is not tuple or len(value)!=8 or any(type(n) is not int for n in value[:7])
+            or value[:4]!=(0x054c,pid,0,0) or any(not 0<=n<=255 for n in value[4:7]) or type(value[7]) is not tuple or len(value[7])!=2
+            or (value[4:7]!=(8,6,0x50) if pid==NORMAL else value[4]!=0xff)):
+        raise ValueError('Unreviewed interface')
+    for ep in value[7]:
+        if (type(ep) is not tuple or len(ep)!=2 or any(type(n) is not int for n in ep)
+                or ep[1]!=2 or ep[0]&0x70 or not 0<ep[0]<=0x8f or not ep[0]&15):
+            raise ValueError('Exact bulk endpoint pair required')
+    incoming=[ep[0] for ep in value[7] if ep[0]&0x80];outgoing=[ep[0] for ep in value[7] if not ep[0]&0x80]
+    if len(incoming)!=1 or len(outgoing)!=1:raise ValueError('Unique IN/OUT required')
+    return incoming[0],outgoing[0]
+
+
+class _Owner:
+    def __init__(self,host,key,device):
+        self.host,self.key,self.device=host,key,device
+        self.claimed=self.detached=self.unknown=self.transition=self.closed=False
+        self.profile=None;self.queried=False
+
+    def query(self):
+        if self.closed or self.unknown or self.transition or not self.claimed or self.queried or self.key.pid!=NORMAL:
+            raise RuntimeError('No fresh MSC capability')
+        self.queried=True
+        def io(kind,value,timeout):
+            if self.closed or self.unknown or self.host.blocked:raise RuntimeError('Stopped owner')
+            if self.host.ops.descriptor(self.device)!=self.profile:raise ValueError('Descriptor changed')
+            self.host.budget.check()
+            fn=self.host.ops.write if kind=='write' else self.host.ops.read
+            return fn(self.device,self.outgoing if kind=='write' else self.incoming,value,timeout)
+        query=_Query(lambda value,timeout:io('write',value,timeout),lambda size,timeout:io('read',size,timeout),self.host.budget)
+        try:return self.host.step('NORMAL_IDENTITY_QUERY',query.run)
+        except BaseException:
+            self.unknown=True;raise
+
+    def close(self):
+        if self.closed:return
+        self.closed=True  # All views invalid BEFORE release/attach/dispose; never retry.
+        error=None
+        safe=not (self.unknown or self.transition or self.host.blocked)
+        try:
+            if safe and self.claimed:
+                self.host.management('RELEASE_INTERFACE',lambda:self.host.ops.release(self.device));self.claimed=False
+            if safe and self.detached:
+                self.host.management('ATTACH_KERNEL',lambda:self.host.ops.attach(self.device));self.detached=False
+        except BaseException as exc:error=exc
+        try:
+            # SDK disposal can implicitly release an interface. This is not proof
+            # of physical closure or zero USB-stack activity after a disconnect.
+            result=self.host.ops.dispose(self.device)
+            if result is not None:raise ValueError('Unconfirmed SDK disposal')
+        except BaseException as exc:
+            if error is None:error=exc
+        if error is not None:
+            self.host.blocked=True;raise error
+
+
+class _Host:
+    """Internal lifecycle, with global lock before any future job Store lock.
+
+    No authentication or simulated state switch is implemented here. A future
+    coordinator must place reviewed auth/material/stop between these stages.
+    This partial binding does NOT generate a completed capture report.
+    """
+    def __init__(self,ops,event,*,firmware,battery_percent,budget=None):
+        if firmware!='2.01' or type(firmware) is not str or type(battery_percent) is not int or not 50<=battery_percent<=100:
+            raise ValueError('Explicit supported version and actual battery prerequisite required')
+        self.ops,self.event=ops,event
+        self.budget=Budget(65536,seconds=120,clock=ops.clock) if budget is None else budget
+        if type(self.budget) is not Budget:raise TypeError('One shared Budget required')
+        self.owners=[];self.lock=None;self.blocked=False;self.initial=None;self.stage='NEW';self.used=False
+
+    def __enter__(self):
+        if self.used:raise RuntimeError('One host lease only')
+        self.used=True;self.lock=self.ops.acquire();return self
+
+    def __exit__(self,kind,error,tb):
+        cleanup=None
+        for owner in reversed(self.owners):
+            try:owner.close()
+            except BaseException as exc:
+                if cleanup is None:cleanup=exc
+        try:self.ops.unlock(self.lock)
+        except BaseException as exc:
+            self.blocked=True
+            if cleanup is None:cleanup=exc
+        self.lock=None
+        if error is None and cleanup is not None:raise cleanup
+        return False
+
+    def step(self,name,action):
+        if self.lock is None or self.blocked:raise RuntimeError('Host lease stopped or missing')
+        try:
+            self.budget.check();self.event('HOST_INTENT',operation=name)
+            result=action()
+            self.budget.check();self.event('HOST_ACK',operation=name)
+            return result
+        except BaseException:
+            self.blocked=True;raise
+
+    def management(self,name,action):
+        def checked():
+            result=action()
+            if result is not None:raise ValueError('Expected SDK management completion')
+        return self.step(name,checked)
+
+    def _seconds(self):
+        self.budget.check();return min(20,self.budget.deadline-self.budget.clock())
+
+    def _unique(self,pid,*,expected=None):
+        keys=self.step('INVENTORY',self.ops.inventory)
+        if type(keys) is not tuple or len(keys)!=1 or type(keys[0]) is not _Key or keys[0].pid!=pid:
+            self.blocked=True;raise ValueError('Exactly one expected camera required')
+        key=keys[0]
+        if expected is not None and key!=expected or self.initial and key.location!=self.initial[0].location:
+            self.blocked=True;raise ValueError('Camera location or generation changed')
+        return key
+
+    def _media(self,maximum=20):
+        if maximum<=0:raise TimeoutError('Media deadline expired')
+        return self.step('MEDIA',lambda:self.ops.media(min(maximum,self._seconds())))
+
+    @staticmethod
+    def _topology(value):
+        registry,media=value
+        if type(registry) is not int or type(media) is not dict or not media:raise ValueError('Verified media required')
+        for name,row in media.items():
+            if (type(name) is not str or not DISK.fullmatch(name) or type(row) is not tuple or len(row)!=3
+                    or type(row[0]) is not str or row[0] not in media or type(row[1]) is not bool
+                    or type(row[2]) is not bool or media[row[0]][1] is not True or row[1] and row[0]!=name):
+                raise ValueError('Verified disk topology required')
+        return registry,tuple(sorted((name,*row[:2]) for name,row in media.items()))
+
+    def _unmount(self):
+        end=min(self.budget.deadline,self.ops.clock()+20);previous=None;since=None
+        while True:
+            value=self._media(end-self.ops.clock());now=self.ops.clock();topology=self._topology(value)
+            if now>=end:raise TimeoutError('Camera media did not stabilize')
+            if topology!=previous:previous,since=topology,now
+            elif now-since>=3:break
+            if now>=end:raise TimeoutError('Camera media did not stabilize')
+            self.ops.sleep(min(.5,end-now));self.budget.check()
+        for name,row in sorted(value[1].items()):
+            if not row[1]:continue
+            if self._topology(self._media())!=previous:raise ValueError('Media changed before unmount')
+            self.step('UNMOUNT',lambda:self.ops.unmount(name,self._seconds()))
+        current=self._media()
+        if self._topology(current)!=previous or any(row[2] for row in current[1].values()):raise ValueError('Media not fully unmounted')
+
+    def _open(self,key):
+        def adopt():
+            owner=_Owner(self,key,self.ops.open(key));self.owners.append(owner);return owner
+        owner=self.step('OPEN_HANDLE',adopt)  # Adopt BEFORE ACK; failed logging still disposes.
+        owner.profile=self.step('DESCRIPTOR',lambda:self.ops.descriptor(owner.device))
+        owner.incoming,owner.outgoing=_profile(owner.profile,key.pid)
+        active=self.step('KERNEL_ACTIVE',lambda:self.ops.active(owner.device))
+        if type(active) is not bool or key.pid==SERVICE and active:raise ValueError('Unreviewed kernel driver state')
+        if active:
+            def detach():
+                result=self.ops.detach(owner.device)
+                owner.detached=True  # Attempt changes state before ACK, even if result is unreviewed.
+                return result
+            self.management('DETACH_KERNEL',detach)
+        def claim():
+            result=self.ops.claim(owner.device);owner.claimed=True;return result
+        self.management('CLAIM_INTERFACE',claim)
+        return owner
+
+    def normal(self):
+        if self.stage!='NEW':raise RuntimeError('Initial query already attempted')
+        self.stage='INITIAL_ATTEMPT'
+        try:
+            key=self._unique(NORMAL);self._unmount();self._unique(NORMAL,expected=key)
+            owner=self._open(key);identity=owner.query();self.initial=key,identity;self.stage='NORMAL_OPEN'
+            return owner,dict(identity)
+        except BaseException:self.blocked=True;raise
+
+    def departing(self,owner):
+        """Invalidate after a reviewed transition; sends no command itself."""
+        if owner not in self.owners or owner.closed:raise ValueError('Owned current handle required')
+        if self.blocked or owner is not self.owners[-1] or self.stage not in ('NORMAL_OPEN','SERVICE_OPEN'):
+            raise RuntimeError('No reviewed transition stage')
+        owner.transition=True;owner.close()
+        self.stage='NORMAL_DEPARTED' if owner.key.pid==NORMAL else 'SERVICE_DEPARTED'
+
+    def service(self):
+        if self.stage!='NORMAL_DEPARTED' or any(not o.closed for o in self.owners):raise RuntimeError('Close normal transition owner first')
+        try:
+            owner=self._open(self._unique(SERVICE));self.stage='SERVICE_OPEN';return owner
+        except BaseException:self.blocked=True;raise
+
+    def normal_return(self):
+        if self.stage!='SERVICE_DEPARTED' or any(not o.closed for o in self.owners):raise RuntimeError('Close service owner first')
+        self.stage='RETURN_ATTEMPT'
+        try:
+            key=self._unique(NORMAL);self._unmount();self._unique(NORMAL,expected=key)
+            owner=self._open(key);identity=owner.query()
+            if identity!=self.initial[1]:raise ValueError('Fresh normal identity differs')
+            self.stage='RETURN_QUERIED';return dict(identity)
+        except BaseException:self.blocked=True;raise
