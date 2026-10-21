@@ -53,7 +53,8 @@ def _selection(path):
     return rows, fingerprint
 
 
-def _candidate(directory, commit):
+def _candidate_content(directory, commit):
+    """Return checked metadata and the same observed table for offline targets."""
     found = set()
     with os.scandir(directory) as entries:
         for entry in entries:
@@ -95,7 +96,11 @@ def _candidate(directory, commit):
     if 'validation_lock_sha256' in data: p.w.hash_bytes(data['validation_lock_sha256'])
     return {'candidate_sha256': candidate_sha, 'table_sha256': p.w.sha(raw), 'table_bytes': len(raw),
             'format_and_declared_acceptance_consistent': True, 'project_model_or_fit_revalidated': False,
-            'validation_lock_revalidated': False, 'camera_color_accuracy_verified': False}
+            'validation_lock_revalidated': False, 'camera_color_accuracy_verified': False}, raw
+
+
+def _candidate(directory, commit):
+    return _candidate_content(directory, commit)[0]
 
 
 def _finite_number(value):

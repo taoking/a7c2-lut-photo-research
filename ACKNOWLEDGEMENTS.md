@@ -66,3 +66,5 @@ USB 服务协议来自 [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-R
 第五十六轮[内部采集装配与独立证据](docs/CAPTURE-EVIDENCE.md)由本项目编写，继续复用QAQLeonard/ma1co/ajalt固定来源及既有许可；未复制或执行归档/USB运行库，不分发密钥、程序或机身材料。新增图检查/收尾回执及自制子进程验证不构成实际SDK或相机验收。
 
 第五十七轮[公开首次采集入口与私有回执传递](docs/CAPTURE-FIRST-USE.md)由本项目编写，复用上述固定来源及同一内部装配，保留QAQLeonard/ma1co/ajalt署名与许可。固定来源故障演练和公开入口信号测试仍只用自制SDK/系统/材料，不分发密钥、程序、身份或私人记录，不构成首次真机采集或恢复验证。
+
+第五十八轮[单槽目标生成与逆向离线检查](docs/SINGLE-SLOT-TARGET.md)依据QAQLeonard固定v2.1的device_layout/six/devicesettings、runtime元数据和既有UXC函数，以及ma1co BK4研究；完整程序重建、mask并集、首次bootstrap/零表及ST绑定规则归原作者。新增内存装配、独立完整目标/逆向断言和私人摘要由本项目补充，不导入/执行归档Python，不分发模板、补丁字节、完整程序/资源或机身资料；自制正例不能替代真机、真实材料和恢复验收。

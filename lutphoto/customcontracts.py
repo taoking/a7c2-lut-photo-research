@@ -109,8 +109,8 @@ def names_checked(names):
     return names
 
 
-def resource_contract(raw, names, layout):
-    """Check rename and full-byte inverse in memory; return no resource payload."""
+def _resource_target(raw, names, layout):
+    """One observed resource, checked target and private in-memory inverse."""
     names_checked(names)
     if layout not in LAYOUTS:
         raise ValueError('Explicit label layout required')
@@ -134,10 +134,15 @@ def resource_contract(raw, names, layout):
     return {'before_sha256': digest(raw), 'after_sha256': digest(target),
             'restored_sha256': digest(restored), 'before_bytes': len(raw),
             'after_bytes': len(target), 'before_count': before['count'],
-            'selected_slots': sorted(names), 'exact_inverse_verified': True}
+            'selected_slots': sorted(names), 'exact_inverse_verified': True}, target, inverse_plan
 
 
-def resource_directory(directory, names, layout):
+def resource_contract(raw, names, layout):
+    """Check rename and full-byte inverse in memory; return no resource payload."""
+    return _resource_target(raw, names, layout)[0]
+
+
+def _resource_files(directory):
     directory = Path(directory)
     if directory.is_symlink() or not directory.is_dir():
         raise ValueError('Resource directory must be a plain directory')
@@ -149,8 +154,12 @@ def resource_directory(directory, names, layout):
                 raise ValueError('Expected exactly 68 resource files')
     if found != set(RESOURCE_FILES):
         raise ValueError('Expected exactly the pinned 68 resource filenames')
-    reports = {name: resource_contract(bounded_read(directory / name, MAX_RESOURCE), names, layout)
-               for name in RESOURCE_FILES}
+    return tuple(directory / name for name in RESOURCE_FILES)
+
+
+def resource_directory(directory, names, layout):
+    reports = {path.name: resource_contract(bounded_read(path, MAX_RESOURCE), names, layout)
+               for path in _resource_files(directory)}
     counts = {r['before_count'] for r in reports.values()}
     if len(counts) != 1:
         raise ValueError('Mixed resource index layouts')
