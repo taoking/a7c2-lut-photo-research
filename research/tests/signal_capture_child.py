@@ -10,7 +10,7 @@ import threading
 import time
 from unittest.mock import patch
 
-from lutphoto import captureowned as o, captureinspect
+from lutphoto import captureowned as o, captureinspect, captureexecution, captureevidence
 from lutphoto.capturecontrol import Cancellation
 from lutphoto.capturesignals import SignalCancellation
 from research.tests import test_captureowned as fixtures
@@ -21,9 +21,11 @@ def emit(value):print(json.dumps(value,sort_keys=True),flush=True)
 
 
 def main():
-    if len(sys.argv)!=3 or sys.argv[1] not in ('configuration','material','stop','dispose'):
+    allowed=('configuration','material','stop','dispose')
+    if len(sys.argv)!=3 or sys.argv[1] not in allowed+tuple('execution-'+n for n in allowed):
         raise ValueError('Fixed own child scenario required')
     scenario,directory=sys.argv[1:]
+    execution=scenario.startswith('execution-');scenario=scenario.removeprefix('execution-')
     f=fixtures.OwnedTests(methodName='runTest');f.setUp()
     token=Cancellation();world=World(f.system());blocked=False;returned=threading.Event();monitor=None
     import signal
@@ -75,18 +77,33 @@ def main():
                 if device.opened and device.phase==0:wait()
                 return result
             point=patch.object(Util,'dispose_resources',hook)
-        with SignalCancellation(token) as scope,point:
-            result=world.run('own',directory,cancel=token)
-        emit({'phase':'DONE','reason_type':result['reason_type'],'capture_phase':result['phase'],
-              'classification':captureinspect.inspect_directory(directory)['classification'],
-              'handlers_restored':all(signal.getsignal(n) is old for n,old in previous.items()) and scope.restoration_confirmed,
+        with point:
+            if execution:
+                _,policy,channel=o._prepare('own',world.system,False,token)
+                world.system.service_device._requests=channel.requests
+                world.host=o.m._Host(world.ops,None,firmware='2.01',battery_percent=75,budget=channel.budget,cancel=token,wait=True)
+                with world.bound():
+                    result=captureexecution._execute('own',directory,world.host,channel,policy,resources=False,
+                        firmware='2.01',battery_percent=75,execution_kind='self-made-sdk')
+                from pathlib import Path
+                checkpoint=json.loads((Path(directory)/captureevidence.CHECKPOINT).read_bytes())
+                reason=result['errors'][0]['reason_type'];stop=checkpoint['flow']['service_stop_ack']
+                matched=checkpoint['flow']['normal_identity_matched'];flags=all(v is False for v in result['unproven'].values())
+                restored=result['cleanup']['signal_handlers']=='CONFIRMED'
+                classification=captureevidence.inspect_directory(directory)['classification']
+            else:
+                with SignalCancellation(token) as scope:result=world.run('own',directory,cancel=token)
+                reason=result['reason_type'];stop=result['simulated_service_stop_ack'];matched=result['simulated_normal_identity_matched']
+                flags=all(result[n] is False for n in captureinspect.FALSE_COMMON|captureinspect.FALSE_PROFILE['owned'])
+                restored=scope.restoration_confirmed;classification=captureinspect.inspect_directory(directory)['classification']
+        emit({'phase':'DONE','reason_type':reason,'capture_phase':result['phase'],
+              'classification':classification,
+              'handlers_restored':all(signal.getsignal(n) is old for n,old in previous.items()) and restored,
               'lease_held':world.system.acquired,'sdk_returned':returned.is_set(),'cancel_requested':token.requested,
               'write_calls':world.counts.get('write',0),'read_calls':world.counts.get('read',0),
               'control_calls':world.counts.get('control',0),
               'single_disposal_attempts':all(d.dispose_attempts==1 for d in world.devices),
-              'service_stop_ack':result['simulated_service_stop_ack'],
-              'normal_identity_matched':result['simulated_normal_identity_matched'],
-              'physical_flags_false':all(result[n] is False for n in captureinspect.FALSE_COMMON|captureinspect.FALSE_PROFILE['owned']),
+              'service_stop_ack':stop,'normal_identity_matched':matched,'physical_flags_false':flags,
               'device_operations_performed':False,'native_sdk_imported':any(n=='usb' or n.startswith('usb.') or n=='libusb_package' for n in sys.modules)})
     finally:
         if monitor is not None:monitor.join(timeout=2)

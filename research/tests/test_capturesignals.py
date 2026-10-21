@@ -11,7 +11,7 @@ import time
 import unittest
 from unittest.mock import Mock,patch
 
-from lutphoto import capturesignals as s, captureinspect
+from lutphoto import capturesignals as s, captureinspect, captureevidence
 from lutphoto.capturecontrol import Cancellation,OperationCancelled
 from research.tests import test_captureowned as fixtures
 
@@ -216,9 +216,11 @@ class SignalProcessTests(unittest.TestCase):
                 self.assertLess(len(buffer),4096)
         return json.loads(buffer)
 
-    def exercise(self,scenario,signum):
+    def exercise(self,scenario,signum,*,execution=False):
         directory=self.root/scenario
-        process=subprocess.Popen([sys.executable,'-S','-B','-m','research.tests.signal_capture_child',scenario,str(directory)],
+        child_scenario='execution-'+scenario if execution else scenario
+        inspector=captureevidence if execution else captureinspect
+        process=subprocess.Popen([sys.executable,'-S','-B','-m','research.tests.signal_capture_child',child_scenario,str(directory)],
                                  stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
                                  cwd=Path(__file__).resolve().parents[2])
         try:
@@ -229,8 +231,9 @@ class SignalProcessTests(unittest.TestCase):
             self.assertTrue(observed['lease_held']);self.assertTrue(observed['owner_retained'])
             self.assertTrue(observed['cancel_requested']);self.assertFalse(observed['sdk_returned'])
             self.assertIs(observed['views_invalidated'],scenario=='dispose')
-            self.assertIsNone(process.poll());self.assertFalse((directory/'owned-report.private.json').exists())
-            self.assertEqual(captureinspect.inspect_directory(directory)['issues'],['ACTIVE_JOB'])
+            report=captureevidence.CHECKPOINT if execution else 'owned-report.private.json'
+            self.assertIsNone(process.poll());self.assertFalse((directory/report).exists())
+            self.assertEqual(inspector.inspect_directory(directory)['issues'],['ACTIVE_JOB'])
             for n in ('write_calls','read_calls','control_calls'):self.assertEqual(observed[n],blocked[n])
             output,error=process.communicate(input=b'RETURN\n',timeout=10)
             self.assertEqual(process.returncode,0,error.decode())
@@ -242,7 +245,7 @@ class SignalProcessTests(unittest.TestCase):
             self.assertFalse(done['device_operations_performed']);self.assertFalse(done['native_sdk_imported'])
             for n in ('write_calls','read_calls','control_calls'):self.assertEqual(done[n],observed[n])
             self.assertNotIn(str(directory),output.decode())
-            self.assertEqual(captureinspect.inspect_directory(directory)['classification'],done['classification'])
+            self.assertEqual(inspector.inspect_directory(directory)['classification'],done['classification'])
         finally:
             if process.poll() is None:
                 try:

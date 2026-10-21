@@ -111,8 +111,9 @@ class _Reader:
                 _private(os.fstat(self.fds[name]), True)
                 self._list(name, 2048 if name == 'events' else 80)
             self.check()
-        except BaseException:
-            self.close()
+        except BaseException as error:
+            try: self.close()
+            except BaseException as cleanup: raise error from cleanup
             raise
 
     def _list(self, folder, limit):
@@ -185,10 +186,15 @@ class _Reader:
                 raise _Refused('INPUT_CHANGED')
 
     def close(self):
-        for fd in self.fds.values(): os.close(fd)
-        self.fds.clear()
-        if self.lock is not None: os.close(self.lock); self.lock = None
-        if self.parent is not None: os.close(self.parent); self.parent = None
+        fds=list(self.fds.values());self.fds.clear()
+        if self.lock is not None:fds.append(self.lock);self.lock=None
+        if self.parent is not None:fds.append(self.parent);self.parent=None
+        error=None
+        for fd in fds:
+            try:os.close(fd)
+            except BaseException as cleanup:
+                if error is None:error=cleanup
+        if error is not None:raise error
 
 
 def _ack_plan(profile, resources):
@@ -238,6 +244,12 @@ def _host_sequence(operations,*,candidate=False):
 
 
 class _Evidence:
+    event_names = EVENTS
+
+    def semantic_event(self, event, details):
+        """Map a reviewed wire vocabulary to shared graph semantics only."""
+        return event, details
+
     def __init__(self):
         self.issues, self.inconsistent = set(), False
         self.pending, self.acks, self.events, self.verified = {}, [], [], {}
@@ -307,13 +319,14 @@ class _Evidence:
                 if (set(record) != {'seq', 'previous_sha256', 'event', 'details'}
                         or type(record['seq']) is not int or record['seq'] != index
                         or record['previous_sha256'] != self.head
-                        or type(record['event']) is not str or record['event'] not in EVENTS
+                        or type(record['event']) is not str or record['event'] not in self.event_names
                         or type(record['details']) is not dict):
                     self.problem('JOURNAL_STRUCTURE_OR_CHAIN', contradiction=True); break
             except (ValueError, TypeError, RecursionError):
                 self.problem('PARTIAL_OR_INVALID_JOURNAL'); break
             event, details = record['event'], record['details']
             if not self.details_valid(event, details): self.problem('INVALID_EVENT_DETAILS', contradiction=True)
+            event, details = self.semantic_event(event, details)
             if event in ('INTENT', 'ACK'):
                 op = details.get('operation')
                 if set(details) != {'operation'} or type(op) is not str or op not in allowed:

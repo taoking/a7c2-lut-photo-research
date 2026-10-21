@@ -242,6 +242,7 @@ class _Owner:
         self.claimed=self.detached=self.unknown=self.transition=self.closed=False
         self.profile=None;self.queried=False
         self.identity_bytes=self.identity_calls=0;self.close_ok=False
+        self.close_error_types=[]
 
     def query(self):
         if self.closed or self.unknown or self.transition or not self.claimed or self.queried or self.key.pid!=NORMAL:
@@ -272,12 +273,14 @@ class _Owner:
                 self.host.management('RELEASE_INTERFACE',lambda:self.host.ops.release(self.device));self.claimed=False
             if safe and self.detached:
                 self.host.management('ATTACH_KERNEL',lambda:self.host.ops.attach(self.device));self.detached=False
-        except BaseException as exc:error=exc
+        except BaseException as exc:
+            error=exc;self.close_error_types.append(type(exc).__name__)
         try:
             # SDK disposal can implicitly release an interface. This is not proof
             # of physical closure or zero USB-stack activity after a disconnect.
             self.host.dispose(self.device)
         except BaseException as exc:
+            self.close_error_types.append(type(exc).__name__)
             if error is None:error=exc
         if error is not None:
             self.host.blocked=True;raise error
@@ -297,19 +300,23 @@ class _Host:
         self.cancel=Cancellation() if cancel is None else cancel
         if type(self.cancel) is not Cancellation or type(wait) is not bool:raise TypeError('Exact cooperative token and wait mode required')
         self.wait_enabled=wait;self.last_wait_timeout=None
+        self.firmware_declared,self.battery_percent_declared=firmware,battery_percent
         self.ops,self.event=ops,event
         self.budget=Budget(65536,seconds=120,clock=ops.clock) if budget is None else budget
         if type(self.budget) is not Budget:raise TypeError('One shared Budget required')
         self.owners=[];self.lock=None;self.blocked=False;self.initial=None;self.stage='NEW';self.used=False
+        self.lease_acquired=self.lease_release_confirmed=False
+        self.cleanup_error_types=[]
+        self.returned_observation=None
 
     def __enter__(self):
         if self.used:raise RuntimeError('One host lease only')
-        self.check();self.used=True;self.lock=self.ops.acquire()
+        self.check();self.used=True;self.lock=self.ops.acquire();self.lease_acquired=True
         try:self.check()
         except BaseException:
             self.blocked=True
-            try:self.ops.unlock(self.lock)
-            except BaseException:pass  # Preserve the original cancellation/deadline error.
+            try:self._unlock()
+            except BaseException:pass  # Error types remain available to the invocation receipt.
             self.lock=None
             raise
         return self
@@ -320,13 +327,19 @@ class _Host:
             try:owner.close()
             except BaseException as exc:
                 if cleanup is None:cleanup=exc
-        try:self.ops.unlock(self.lock)
+        try:self._unlock()
         except BaseException as exc:
             self.blocked=True
             if cleanup is None:cleanup=exc
         self.lock=None
         if error is None and cleanup is not None:raise cleanup
         return False
+
+    def _unlock(self):
+        try:self.ops.unlock(self.lock)
+        except BaseException as error:
+            self.cleanup_error_types.append(type(error).__name__);raise
+        self.lease_release_confirmed=True
 
     def check(self):
         self.cancel.check();self.budget.check()
@@ -485,5 +498,6 @@ class _Host:
             self._unmount();self._unique(NORMAL,expected=key)
             owner=self._open(key);identity=owner.query()
             if identity!=self.initial[1]:raise ValueError('Fresh normal identity differs')
+            self.returned_observation=dict(identity)
             self.stage='RETURN_QUERIED';return dict(identity)
         except BaseException:self.blocked=True;raise

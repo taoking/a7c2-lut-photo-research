@@ -108,9 +108,9 @@ class Sink:
         return result
 
     def close(self):
-        if self.fd is not None:
-            os.close(self.fd); self.fd = None
+        fd,self.fd=self.fd,None
         self.closed = True
+        if fd is not None:os.close(fd)
 
 
 class Store:
@@ -120,6 +120,8 @@ class Store:
             raise ValueError('Bounded event capacity required')
         self.events_limit = events_limit
         self.fds, self.lock, self.seq, self.head = {}, None, 0, '0' * 64
+        self.close_attempted = self.close_confirmed = False
+        self.close_error_types = ()
         self.documents = {}
         self.path, self.parent = _parent(path)
         try:
@@ -135,8 +137,9 @@ class Store:
             self.check()
             for fd in self.fds.values(): os.fsync(fd)
             os.fsync(self.parent)
-        except BaseException:
-            self.close()
+        except BaseException as error:
+            try: self.close()
+            except BaseException as cleanup: raise error from cleanup
             raise
 
     def check(self):
@@ -245,9 +248,17 @@ class Store:
         self.head = result['sha256']; self.seq += 1
 
     def close(self):
-        for fd in self.fds.values(): os.close(fd)
-        self.fds.clear()
-        if self.lock is not None:
-            os.close(self.lock); self.lock = None
-        if getattr(self, 'parent', None) is not None:
-            os.close(self.parent); self.parent = None
+        if self.close_attempted: return
+        self.close_attempted = True
+        # Invalidate before each attempt: close may have succeeded before
+        # raising, and the fd number can subsequently belong to another file.
+        fds = list(self.fds.values()); self.fds.clear()
+        if self.lock is not None: fds.append(self.lock); self.lock = None
+        if getattr(self, 'parent', None) is not None: fds.append(self.parent); self.parent = None
+        errors = []
+        for fd in fds:
+            try: os.close(fd)
+            except BaseException as error: errors.append(error)
+        self.close_error_types = tuple(type(error).__name__ for error in errors)
+        self.close_confirmed = not errors
+        if errors: raise errors[0]
