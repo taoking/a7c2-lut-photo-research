@@ -21,3 +21,6 @@ state.json
 *-report.json
 research/materials/
 research/output/
+
+# Camera menu settings and other owner card data must stay local.
+/PRIVATE/

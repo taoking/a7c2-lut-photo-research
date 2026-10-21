@@ -6,7 +6,7 @@
 
 保留 [MDHan、QAQLeonard 及其他上游署名](../ACKNOWLEDGEMENTS.md)、[许可证](../LICENSE)、[来源说明](../NOTICE.md)与固定上游锁文件。研究路径不修改原安装器的固定哈希、偏移、机型/版本或安全门槛。
 
-公开树仅纳入审核过的源码、文本说明和公开验证摘要。`research/materials/`、`research/output/`、`.upstream/`、`.venv/`、原始固件、设备备份、设置、个人日志和生成报告不随发布上传；发布前同时核对候选文件和将推送的历史，文档使用通用路径。
+公开树仅纳入审核过的源码、文本说明和公开验证摘要。`research/materials/`、`research/output/`、`.upstream/`、`.venv/`、根`PRIVATE/`菜单设置副本、原始固件、设备备份、设置、个人日志和生成报告不随发布上传；发布前同时核对候选文件和将推送的历史，文档使用通用路径。
 
 复核入口：
 

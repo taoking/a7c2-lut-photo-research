@@ -1,7 +1,9 @@
-"""Internal macOS ownership binding, exercised only with injected fake APIs.
+"""Internal macOS ownership binding, reached by the explicit capture entry.
 
 QAQLeonard/ma1co source provenance: capturemsc and ACKNOWLEDGEMENTS.md.
-No public live entry or capture CLI. Importing this module does no host I/O.
+captureexecution constructs NativeOps only after the source/local prerequisites;
+capturecamera is the public owner-capture CLI. Import does no host I/O. Fake-API
+tests and host library loading do not establish actual camera communication.
 """
 import fcntl
 import os
@@ -80,10 +82,11 @@ def _walk(tree):
 
 
 class _NativeOps:
-    """Unwired native API binding. No constructors/imports enumerate USB.
+    """Native API binding for the authorized, explicit owner-capture assembly.
 
-    Tests replace runtime/commands. No caller in shipped tools instantiates this
-    class; real opening/claiming still needs explicit device-flow integration.
+    Import and construction do not enumerate USB. _runtime initializes libusb;
+    inventory/open subsequently enumerate it. Tests replace runtime/commands;
+    their success does not verify real opening, claiming or communication.
     """
     clock=staticmethod(time.monotonic)
     sleep=staticmethod(time.sleep)
