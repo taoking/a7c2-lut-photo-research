@@ -45,12 +45,22 @@ class CandidateTests(unittest.TestCase):
         for flag in i.FALSE_COMMON|i.FALSE_PROFILE['owned']:self.assertIs(result[flag],False)
 
     def test_coordinator_has_no_peer_or_system_arrival_capability(self):
-        material=o._Run.materials;seen=[]
+        material=o._OwnedRun.materials;seen=[]
         def check(run,resources):
-            self.assertIsNone(run.peer);self.assertIsNone(run.system);seen.append(True)
+            self.assertIsNone(run.peer);self.assertFalse(hasattr(run,'system'));seen.append(True)
             return material(run,resources)
         with patch.object(c._NativeRun,'materials',check):result,_,_=self.make()
         self.assertEqual(result['phase'],'SIMULATED_OWNED_CAPTURE_COMPLETE');self.assertEqual(seen,[True])
+
+    def test_shared_coordinator_construction_needs_no_fake_system_or_host_access(self):
+        # An inert object has no .ops/.peer or device capability. Construction
+        # must not inspect it or initialize a fake adapter and then discard it.
+        host=object();channel=c.OfflineChannel('own',guards=True)
+        policy=o.programidentity._load_policy('own')
+        run=c._NativeRun('own',None,host,channel,policy)
+        self.assertIs(run.host,host);self.assertIsNone(run.peer)
+        self.assertFalse(hasattr(run,'system'));self.assertIsNone(run.auth)
+        self.assertEqual(run.files,{})
 
     def test_fake_ops_exposes_only_reviewed_native_method_signatures(self):
         names={'clock','sleep','acquire','unlock','inventory','media','unmount','open','descriptor','active','detach',
@@ -164,6 +174,23 @@ class CandidateTests(unittest.TestCase):
         self.assertEqual(system.counts['dispose'],1);self.assertEqual(system.counts['open'],1)
         self.assertEqual(i.inspect_directory(directory)['classification'],'NEEDS_REVIEW_UNKNOWN')
         self.assertTrue(result['host_blocked'])
+
+    def test_complete_simulation_file_cannot_hide_final_job_or_lease_release_error(self):
+        close=capturestore.Store.close
+        def failed_close(store):
+            close(store)
+            raise OSError('Own post-close failure')
+        for job_failure in (True,False):
+            with self.subTest(job_failure=job_failure):
+                directory=self.root/('job-release' if job_failure else 'lease-release')
+                options={} if job_failure else {'faults':{('global-release',1):OSError('Own lease failure')}}
+                system=self.fixture.system(system_options=options)
+                scope=patch.object(capturestore.Store,'close',failed_close) if job_failure else contextlib.nullcontext()
+                with scope,self.assertRaises(OSError):c.rehearse('own',directory,system)
+                self.assertEqual(system.counts['dispose'],3);self.assertFalse(system.acquired)
+                # Existing schema attests evidence before cleanup, not the
+                # process exit. A future real receipt must cover both scopes.
+                self.assertEqual(i.inspect_directory(directory)['classification'],'CONSISTENT_SIMULATION_COMPLETE')
 
     def test_review_matches_fixed_request_and_material_scope_without_native_entry(self):
         for resources in (False,True):

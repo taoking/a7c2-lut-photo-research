@@ -57,18 +57,10 @@ class _CandidateOps:
     def read(self,d,ep,size,timeout):return self.system.read(d,ep,size,timeout)
 
 
-class _NativeRun(o._Run):
-    def __init__(self,*args,**kwargs):
-        super().__init__(*args,**kwargs)
-        # No cached peer observation or synthetic arrival capability in flow.
-        self.peer=self.system=None
-
+class _NativeRun(o._OwnedRun):
     def preflight(self,resources):
         super().preflight(resources)
         self.event('NATIVE_BINDING_CANDIDATE_MODELED',binding='native-shaped-fake-ops',live_execution_enabled=False)
-
-    def arrive_service(self):pass
-    def arrive_normal(self):pass
 
 
 def rehearse(archive,directory,system,*,resources=False,cancel=None):
@@ -76,7 +68,7 @@ def rehearse(archive,directory,system,*,resources=False,cancel=None):
     cancel,policy,channel=o._prepare(archive,system,resources,cancel)
     host=o.m._Host(_CandidateOps(system),None,firmware=system.peer.version,battery_percent=system.peer.battery,
                    budget=channel.budget,cancel=cancel,wait=True)
-    return o._execute(archive,directory,system,host,channel,policy,resources=resources,run_type=_NativeRun)
+    return o._execute(archive,directory,host,channel,policy,resources=resources,run_type=_NativeRun)
 
 
 def review(archive,*,resources=False):

@@ -190,10 +190,15 @@ class _Flow(r._RawFlow):
             raise
 
 
-class _Run(p._Run):
-    def __init__(self,archive,store,system,host,channel,policy):
-        s._Run.__init__(self,store,system.peer,channel,policy)
-        self.archive,self.system,self.host=archive,system,host
+class _OwnedRun(p._Run):
+    """Shared owner-based mechanics; no synthetic peer or arrival capability.
+
+    Evidence is still simulation-only. Removing fixture dependencies does not
+    provide the production report/lifecycle contract or enable live capture.
+    """
+    def __init__(self,archive,store,host,channel,policy):
+        s._Run.__init__(self,store,None,channel,policy)
+        self.archive,self.host=archive,host
         self.auth=None;self.drivers=[];self.ports=[];self.receipts=set();self.blocked=False
         self.cleanup_error_type=None
 
@@ -215,11 +220,9 @@ class _Run(p._Run):
         port=_OwnedPort(owner,self.channel);view=r._AuthView(port)
         self.ports.append(port);self.drivers.append(view);return view
 
-    def arrive_service(self):
-        self.host.step('SIMULATE_SERVICE_ARRIVAL',self.system.service_arrival)
+    def arrive_service(self):pass
 
-    def arrive_normal(self):
-        self.host.step('SIMULATE_NORMAL_ARRIVAL',self.system.normal_arrival)
+    def arrive_normal(self):pass
 
     def body(self,resources):
         self.preflight(resources)
@@ -285,6 +288,20 @@ class _Run(p._Run):
         return result
 
 
+class _Run(_OwnedRun):
+    """Legacy owned rehearsal alone schedules explicit synthetic arrivals."""
+    def __init__(self,archive,store,host,channel,policy):
+        if type(host.ops) is not SyntheticSystem:raise TypeError('Exact fake OS required')
+        super().__init__(archive,store,host,channel,policy)
+        self.system=host.ops
+
+    def arrive_service(self):
+        self.host.step('SIMULATE_SERVICE_ARRIVAL',self.system.service_arrival)
+
+    def arrive_normal(self):
+        self.host.step('SIMULATE_NORMAL_ARRIVAL',self.system.normal_arrival)
+
+
 def _prepare(archive,system,resources,cancel):
     """Shared fixed-source preparation; no host action or public backend hook."""
     if (type(system) is not SyntheticSystem or type(resources) is not bool or system.started or system.trace
@@ -303,19 +320,22 @@ def _prepare(archive,system,resources,cancel):
     return cancel,policy,channel
 
 
-def _execute(archive,directory,system,host,channel,policy,*,resources,run_type=_Run):
+def _execute(archive,directory,host,channel,policy,*,resources,run_type=_Run):
     """Internal lifecycle shared by exact-fake rehearsals, never a live entry."""
     store=run=None
     host.__enter__()
     try:
         store=Store(directory,events_limit=s.EVENTS_LIMIT)
-        run=run_type(archive,store,system,host,channel,policy);host.event=run.event
+        run=run_type(archive,store,host,channel,policy);host.event=run.event
         try:
             run.body(resources);run.sync_auth()
             if not run.returned or run.blocked or run.unknown or channel.active or any(not o.close_ok for o in host.owners):
                 raise RuntimeError('Owned lifecycle incomplete')
             host.check();run.event('READY_FOR_REPORT')
             for name,info in {**run.files,**store.documents}.items():store.verify(name,info)
+            # This simulation report precedes job/lease release. A caller must
+            # still observe the finally outcome; the file alone is not proof
+            # that the whole invocation (or a signal scope) completed.
             result=run.report(True);store.put(REPORT,encoded(result));return result
         except BaseException as exc:
             run.sync_auth()
@@ -344,4 +364,4 @@ def rehearse(archive,directory,system,*,resources=False,cancel=None):
     cancel,policy,channel=_prepare(archive,system,resources,cancel)
     host=m._Host(system,None,firmware=system.peer.version,battery_percent=system.peer.battery,
                  budget=channel.budget,cancel=cancel,wait=True)
-    return _execute(archive,directory,system,host,channel,policy,resources=resources)
+    return _execute(archive,directory,host,channel,policy,resources=resources)

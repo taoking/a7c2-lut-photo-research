@@ -181,5 +181,5 @@ class World:
         self.host=m._Host(self.ops,None,firmware=self.system.peer.version,battery_percent=self.system.peer.battery,
                           budget=channel.budget,cancel=cancel,wait=True)
         with self.bound():
-            return owned._execute(archive,directory,self.system,self.host,channel,policy,
+            return owned._execute(archive,directory,self.host,channel,policy,
                                   resources=resources,run_type=candidate._NativeRun)
