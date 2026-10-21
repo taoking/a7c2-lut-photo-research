@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from . import captureauth as a, capturemac as m, capturemsc, captureraw as r
 from . import capturepipeline as p, capturesession as s, programidentity
 from .captureprotocol import OfflineChannel
+from .capturecontrol import Cancellation, ObservationTimeout
 from .capturestore import Budget, Store, encoded
 
 REPORT='owned-report.private.json'
@@ -31,7 +32,7 @@ class SyntheticSystem:
     They are independent packet oracles, not cached decoded identities.
     Secret challenges, packets and source identities remain private memory.
     """
-    def __init__(self,peer,normal,service,initial_identity,returned_identity,*,locations=None,faults=None):
+    def __init__(self,peer,normal,service,initial_identity,returned_identity,*,locations=None,faults=None,arrivals=None):
         if (type(peer) is not s.SyntheticPeer or any(type(d) is not r.SyntheticDevice or d.peer is not peer
                 or d.closed or d.trace or d.auth.used or d.auth.trace for d in (normal,service))
                 or normal.pid!=m.NORMAL or service.pid!=m.SERVICE or peer.trace or peer.counts):
@@ -49,6 +50,11 @@ class SyntheticSystem:
         if (type(faults) is not dict or len(faults)>32 or any(type(k) is not tuple or len(k)!=2 or type(k[0]) is not str
                 or type(k[1]) is not int or not 1<=k[1]<=65536 or callable(v) for k,v in faults.items())):
             raise ValueError('Bounded own host fault results required')
+        arrivals={} if arrivals is None else arrivals
+        if (type(arrivals) is not dict or any(type(k) is not int or k not in (1,2) or type(v) is not tuple or not 1<=len(v)<=42
+                or any(type(row) is not tuple or len(row)>2 or any(type(key) is not m._Key for key in row) for row in v) for k,v in arrivals.items())):
+            raise TypeError('Bounded own transition inventory tapes required')
+        self.arrivals=dict(arrivals);self.arrival_index={1:0,2:0}
         self.peer,self.normal_device,self.service_device=peer,normal,service
         self.handles=(_Handle(m.NORMAL,list(initial_identity),normal),_Handle(m.SERVICE,[],service),_Handle(m.NORMAL,list(returned_identity)))
         self.faults=dict(faults);self.trace=[];self.counts={};self.phase=0;self.now=0;self.mounted=True;self.acquired=False;self.started=False
@@ -71,7 +77,12 @@ class SyntheticSystem:
     def unlock(self,fd):
         if fd!=1 or not self.acquired:raise RuntimeError('No held modeled lock')
         self.acquired=False;return self._record('global-release')
-    def inventory(self):return self._result('inventory',(self.keys[self.phase],))
+    def inventory(self):
+        values=self.arrivals.get(self.phase)
+        default=(self.keys[self.phase],)
+        if values:
+            index=self.arrival_index[self.phase];default=values[min(index,len(values)-1)];self.arrival_index[self.phase]+=1
+        return self._result('inventory',default)
     def media(self,seconds):
         return self._result('media',(100,{'disk9':('disk9',True,self.mounted),'disk9s1':('disk9',False,self.mounted)}))
     def unmount(self,disk,seconds):
@@ -141,8 +152,9 @@ class _OwnedPort(r._Port):
         o=self.owner
         if o.closed or o.unknown or o.transition or o.host.blocked or not o.claimed or self.unknown:
             raise RuntimeError('Stopped owned protocol capability')
-        self.budget.check()
+        o.host.check()
         if o.host.ops.descriptor(o.device)!=o.profile:raise ValueError('Owned descriptor changed')
+        o.host.check()
 
     def _io(self,kind,data=None,*,maximum=0,timeout=5000):
         try:
@@ -166,12 +178,33 @@ class _OwnedPort(r._Port):
     def close(self):raise RuntimeError('Borrowed capability cannot dispose its owner')
 
 
+class _Flow(r._RawFlow):
+    def _observe_return(self,observation):
+        try:return super()._observe_return(observation)
+        except ObservationTimeout as exc:
+            if self.host.last_wait_timeout is exc:
+                # Known polling failure does not erase the earlier stop receipt.
+                # Its unacknowledged observation still stays unknown to inspection.
+                self.unknown=any(stage.unknown for stage in (self.normal,self.service) if stage is not None)
+                self.blocked=True;self.phase='STOP_CONTROL_RETURNED'
+            raise
+
+
 class _Run(p._Run):
     def __init__(self,archive,store,system,host,channel,policy):
         s._Run.__init__(self,store,system.peer,channel,policy)
         self.archive,self.system,self.host=archive,system,host
         self.auth=None;self.drivers=[];self.ports=[];self.receipts=set();self.blocked=False
         self.cleanup_error_type=None
+
+    def call(self,name,action,*,wire=False):
+        before=self.unknown
+        try:return super().call(name,action,wire=wire)
+        except ObservationTimeout as exc:
+            if not wire and self.host.last_wait_timeout is exc:
+                self.unknown=before or self.channel.unknown or any(owner.unknown for owner in self.host.owners)
+                self.blocked=True
+            raise
 
     def sync_auth(self):
         self.unknown|=any(o.unknown for o in self.host.owners)
@@ -187,7 +220,7 @@ class _Run(p._Run):
         self.event('OWNED_HOST_BOUND_MODELED',owned_handles=3,same_service_handle=True)
         owner,identity=self.call('normal-before',self.host.normal)
         value=_observation(owner.key,identity);self.initial=s._normal(value);self.stage='C1'
-        view=self._port(owner);self.auth=r._RawFlow(self.archive,self.store,value,budget=self.channel.budget)
+        view=self._port(owner);self.auth=_Flow(self.archive,self.store,value,budget=self.channel.budget);self.auth.host=self.host
         try:self.auth.normal_auth(view)
         finally:self.sync_auth()
         self._depart(owner,'normal-initial')
@@ -246,19 +279,22 @@ class _Run(p._Run):
         return result
 
 
-def rehearse(archive,directory,system,*,resources=False):
+def rehearse(archive,directory,system,*,resources=False,cancel=None):
     """One new private job on an exact unused synthetic system; no backend hook."""
     if (type(system) is not SyntheticSystem or type(resources) is not bool or system.started or system.trace
             or system.peer.trace or system.peer.counts or any(d.closed or d.trace or d.auth.used or d.auth.trace
                 for d in (system.normal_device,system.service_device))):
         raise TypeError('Fresh exact synthetic system required')
+    cancel=Cancellation() if cancel is None else cancel
+    if type(cancel) is not Cancellation:raise TypeError('Exact cooperative token required')
+    cancel.check()
     peer=system.peer
     if peer.version!='2.01' or type(peer.battery) is not int or not 50<=peer.battery<=100:raise ValueError('Synthetic supported version/battery required')
     capturemsc.verify_sources(archive)  # Before even modeled host acquisition.
     policy=programidentity._load_policy(archive)
     channel=OfflineChannel(archive,resources=resources,guards=True)
     channel.budget=Budget(channel.budget.limit+p.AUTH_ALLOWANCE+IDENTITY_ALLOWANCE,clock=system.clock)
-    host=m._Host(system,None,firmware=peer.version,battery_percent=peer.battery,budget=channel.budget)
+    host=m._Host(system,None,firmware=peer.version,battery_percent=peer.battery,budget=channel.budget,cancel=cancel,wait=True)
     store=run=None
     host.__enter__()
     try:
@@ -268,7 +304,7 @@ def rehearse(archive,directory,system,*,resources=False):
             run.body(resources);run.sync_auth()
             if not run.returned or run.blocked or run.unknown or channel.active or any(not o.close_ok for o in host.owners):
                 raise RuntimeError('Owned lifecycle incomplete')
-            channel.budget.check();run.event('READY_FOR_REPORT')
+            host.check();run.event('READY_FOR_REPORT')
             for name,info in {**run.files,**store.documents}.items():store.verify(name,info)
             result=run.report(True);store.put(REPORT,encoded(result));return result
         except BaseException as exc:

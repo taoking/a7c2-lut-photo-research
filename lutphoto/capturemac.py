@@ -15,6 +15,7 @@ import time
 from dataclasses import dataclass
 
 from .capturemsc import _Query
+from .capturecontrol import Cancellation, ObservationTimeout
 from .capturestore import Budget
 
 LOCK = '/var/run/a7c2-fl23-macos.lock'  # Same exclusion domain as the old installer.
@@ -239,10 +240,12 @@ class _Owner:
         self.queried=True
         def io(kind,value,timeout):
             if self.closed or self.unknown or self.host.blocked:raise RuntimeError('Stopped owner')
+            self.host.check()
             if self.host.ops.descriptor(self.device)!=self.profile:raise ValueError('Descriptor changed')
-            self.host.budget.check()
+            self.host.check()
             fn=self.host.ops.write if kind=='write' else self.host.ops.read
-            return fn(self.device,self.outgoing if kind=='write' else self.incoming,value,timeout)
+            result=fn(self.device,self.outgoing if kind=='write' else self.incoming,value,timeout)
+            self.host.check();return result
         query=_Query(lambda value,timeout:io('write',value,timeout),lambda size,timeout:io('read',size,timeout),self.host.budget)
         try:return self.host.step('NORMAL_IDENTITY_QUERY',query.run)
         except BaseException:
@@ -254,7 +257,7 @@ class _Owner:
         if self.closed:return
         self.closed=True  # All views invalid BEFORE release/attach/dispose; never retry.
         error=None
-        safe=not (self.unknown or self.transition or self.host.blocked)
+        safe=not (self.unknown or self.transition or self.host.blocked or self.host.cancel.requested)
         try:
             if safe and self.claimed:
                 self.host.management('RELEASE_INTERFACE',lambda:self.host.ops.release(self.device));self.claimed=False
@@ -279,9 +282,12 @@ class _Host:
     coordinator must place reviewed auth/material/stop between these stages.
     This partial binding does NOT generate a completed capture report.
     """
-    def __init__(self,ops,event,*,firmware,battery_percent,budget=None):
+    def __init__(self,ops,event,*,firmware,battery_percent,budget=None,cancel=None,wait=False):
         if firmware!='2.01' or type(firmware) is not str or type(battery_percent) is not int or not 50<=battery_percent<=100:
             raise ValueError('Explicit supported version and actual battery prerequisite required')
+        self.cancel=Cancellation() if cancel is None else cancel
+        if type(self.cancel) is not Cancellation or type(wait) is not bool:raise TypeError('Exact cooperative token and wait mode required')
+        self.wait_enabled=wait;self.last_wait_timeout=None
         self.ops,self.event=ops,event
         self.budget=Budget(65536,seconds=120,clock=ops.clock) if budget is None else budget
         if type(self.budget) is not Budget:raise TypeError('One shared Budget required')
@@ -289,7 +295,15 @@ class _Host:
 
     def __enter__(self):
         if self.used:raise RuntimeError('One host lease only')
-        self.used=True;self.lock=self.ops.acquire();return self
+        self.check();self.used=True;self.lock=self.ops.acquire()
+        try:self.check()
+        except BaseException:
+            self.blocked=True
+            try:self.ops.unlock(self.lock)
+            except BaseException:pass  # Preserve the original cancellation/deadline error.
+            self.lock=None
+            raise
+        return self
 
     def __exit__(self,kind,error,tb):
         cleanup=None
@@ -305,12 +319,15 @@ class _Host:
         if error is None and cleanup is not None:raise cleanup
         return False
 
+    def check(self):
+        self.cancel.check();self.budget.check()
+
     def step(self,name,action):
         if self.lock is None or self.blocked:raise RuntimeError('Host lease stopped or missing')
         try:
-            self.budget.check();self.event('HOST_INTENT',operation=name)
+            self.check();self.event('HOST_INTENT',operation=name)
             result=action()
-            self.budget.check();self.event('HOST_ACK',operation=name)
+            self.check();self.event('HOST_ACK',operation=name)
             return result
         except BaseException:
             self.blocked=True;raise
@@ -339,7 +356,7 @@ class _Host:
         return self.step(name,checked)
 
     def _seconds(self):
-        self.budget.check();return min(20,self.budget.deadline-self.budget.clock())
+        self.check();return min(20,self.budget.deadline-self.budget.clock())
 
     def _unique(self,pid,*,expected=None):
         keys=self.step('INVENTORY',self.ops.inventory)
@@ -349,6 +366,34 @@ class _Host:
         if expected is not None and key!=expected or self.initial and key.location!=self.initial[0].location:
             self.blocked=True;raise ValueError('Camera location or generation changed')
         return key
+
+    def _wait(self,pid):
+        if self.initial is None:raise RuntimeError('Initial same-port identity required')
+        phase='service' if pid==SERVICE else 'normal-return'
+        end=min(self.budget.deadline,self.ops.clock()+20)
+        candidate=None;since=None;polls=0
+        try:
+            self.check();self.event('HOST_WAIT_BEGIN_MODELED',phase=phase)
+            while True:
+                self.cancel.check()
+                if self.ops.clock()>=end or polls>=40:
+                    self.event('HOST_WAIT_END_MODELED',phase=phase,outcome='timed-out',polls=polls)
+                    error=ObservationTimeout(phase);self.last_wait_timeout=error;raise error
+                self.check()
+                keys=self.step('INVENTORY',self.ops.inventory);polls+=1
+                if self.ops.clock()>=end:continue
+                if (type(keys) is not tuple or len(keys)>1 or any(type(k) is not _Key
+                        or k.location!=self.initial[0].location for k in keys)):
+                    raise ValueError('Ambiguous or changed-port transition observation')
+                key=keys[0] if keys else None
+                if key is not None and key.pid==pid:
+                    if key!=candidate:candidate,since=key,self.ops.clock()
+                    elif self.ops.clock()-since>=.5:
+                        self.event('HOST_WAIT_END_MODELED',phase=phase,outcome='found',polls=polls)
+                        return key
+                else:candidate=since=None  # Only absence/same-port old PID can wait.
+                self.ops.sleep(min(.5,end-self.ops.clock()))
+        except BaseException:self.blocked=True;raise
 
     def _media(self,maximum=20):
         if maximum<=0:raise TimeoutError('Media deadline expired')
@@ -373,7 +418,7 @@ class _Host:
             if topology!=previous:previous,since=topology,now
             elif now-since>=3:break
             if now>=end:raise TimeoutError('Camera media did not stabilize')
-            self.ops.sleep(min(.5,end-now));self.budget.check()
+            self.ops.sleep(min(.5,end-now));self.check()
         for name,row in sorted(value[1].items()):
             if not row[1]:continue
             if self._topology(self._media())!=previous:raise ValueError('Media changed before unmount')
@@ -420,14 +465,15 @@ class _Host:
     def service(self):
         if self.stage!='NORMAL_DEPARTED' or any(not o.closed for o in self.owners):raise RuntimeError('Close normal transition owner first')
         try:
-            owner=self._open(self._unique(SERVICE));self.stage='SERVICE_OPEN';return owner
+            owner=self._open(self._wait(SERVICE) if self.wait_enabled else self._unique(SERVICE));self.stage='SERVICE_OPEN';return owner
         except BaseException:self.blocked=True;raise
 
     def normal_return(self):
         if self.stage!='SERVICE_DEPARTED' or any(not o.closed for o in self.owners):raise RuntimeError('Close service owner first')
         self.stage='RETURN_ATTEMPT'
         try:
-            key=self._unique(NORMAL);self._unmount();self._unique(NORMAL,expected=key)
+            key=self._wait(NORMAL) if self.wait_enabled else self._unique(NORMAL)
+            self._unmount();self._unique(NORMAL,expected=key)
             owner=self._open(key);identity=owner.query()
             if identity!=self.initial[1]:raise ValueError('Fresh normal identity differs')
             self.stage='RETURN_QUERIED';return dict(identity)

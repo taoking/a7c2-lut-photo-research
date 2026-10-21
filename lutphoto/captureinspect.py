@@ -55,7 +55,7 @@ COMMON = {'schema', 'private_report', 'simulation_only', 'phase', 'reason_type',
     'journal_records', 'journal_head_sha256', 'commit', 'archive_sha256'}
 EVENTS = {'INTENT', 'ACK', 'STAGE', 'HOST_FILE_VERIFIED', 'SNAPSHOT_FORMAT_CHECKED', 'SYNTHETIC_PREFLIGHT',
     'PROGRAM_CONTENT_MATCHED', 'OBSERVATIONS_COMPLETE', 'NORMAL_OBSERVATION_MATCHED', 'SYNTHETIC_LOCK_ORDER',
-    'GUARD_ABSENCE_MODELED', 'NORMAL_SAME_SOURCE_MATCH_MODELED', 'READY_FOR_REPORT', 'NEEDS_REVIEW', 'RAW_AUTHENTICATION_MODELED', 'RAW_HANDLES_BOUND_MODELED', 'RAW_HANDLE_CLOSED_MODELED','HOST_INTENT','HOST_ACK','OWNED_HOST_BOUND_MODELED','OWNED_HANDLE_CLOSED_MODELED'}
+    'GUARD_ABSENCE_MODELED', 'NORMAL_SAME_SOURCE_MATCH_MODELED', 'READY_FOR_REPORT', 'NEEDS_REVIEW', 'RAW_AUTHENTICATION_MODELED', 'RAW_HANDLES_BOUND_MODELED', 'RAW_HANDLE_CLOSED_MODELED','HOST_INTENT','HOST_ACK','OWNED_HOST_BOUND_MODELED','OWNED_HANDLE_CLOSED_MODELED','HOST_WAIT_BEGIN_MODELED','HOST_WAIT_END_MODELED'}
 
 
 class _Refused(ValueError):
@@ -244,11 +244,16 @@ class _Evidence:
         self.raw_auth_markers = 0
         self.raw_bindings, self.raw_closes = 0, {}
         self.host_pending,self.host_acks,self.owned_closes={},[],{};self.owned_bindings=0
-        self.host_positions=[]
+        self.host_positions=[];self.waits=[];self.active_wait=None
 
     def details_valid(self, event, details):
         if event in ('OBSERVATIONS_COMPLETE', 'NORMAL_OBSERVATION_MATCHED', 'NORMAL_SAME_SOURCE_MATCH_MODELED', 'READY_FOR_REPORT'):
             return not details
+        if event=='HOST_WAIT_BEGIN_MODELED':
+            return set(details)=={'phase'} and details['phase'] in ('service','normal-return')
+        if event=='HOST_WAIT_END_MODELED':
+            return (set(details)=={'phase','outcome','polls'} and details['phase'] in ('service','normal-return')
+                and details['outcome'] in ('found','timed-out') and type(details['polls']) is int and 0<=details['polls']<=40)
         if event in ('HOST_INTENT','HOST_ACK'):
             return set(details)=={'operation'} and type(details['operation']) is str and details['operation'] in HOST_OPERATIONS
         if event=='OWNED_HOST_BOUND_MODELED':
@@ -313,6 +318,19 @@ class _Evidence:
                 else:
                     if op not in self.pending: self.problem('ACK_WITHOUT_INTENT', contradiction=True)
                     self.pending.pop(op, None); self.acks.append(op)
+            elif event=='HOST_WAIT_BEGIN_MODELED':
+                if self.active_wait is not None or self.owned_bindings!=1 or self.host_pending:
+                    self.problem('INVALID_HOST_WAIT_BEGIN',contradiction=True)
+                self.active_wait=(details.get('phase'),len(self.host_acks),len(self.acks))
+            elif event=='HOST_WAIT_END_MODELED':
+                if self.active_wait is None or details.get('phase')!=self.active_wait[0]:
+                    self.problem('INVALID_HOST_WAIT_END',contradiction=True)
+                else:
+                    phase,start,position=self.active_wait;polls=details.get('polls')
+                    if type(polls) is not int or self.host_acks[start:]!=['INVENTORY']*polls or self.host_pending:
+                        self.problem('HOST_WAIT_POLL_EVIDENCE_DIFFERS',contradiction=True)
+                    self.waits.append((phase,details.get('outcome'),polls,start,len(self.host_acks),position))
+                self.active_wait=None
             elif event in ('HOST_INTENT','HOST_ACK'):
                 op=details.get('operation')
                 if type(op) is not str or op not in HOST_OPERATIONS:
@@ -425,7 +443,7 @@ class _Evidence:
                     or not 0<=report['owned_handles_closed']<=report['owned_handles_opened']<=3
                     or report['cleanup_error_type'] is not None and (type(report['cleanup_error_type']) is not str or len(report['cleanup_error_type'])>128)):
                 self.problem('INVALID_OWNED_ACCOUNTING',contradiction=True)
-        elif self.host_acks or self.host_pending or self.owned_bindings or self.owned_closes:
+        elif self.host_acks or self.host_pending or self.owned_bindings or self.owned_closes or self.waits or self.active_wait:
             self.problem('OWNED_EVIDENCE_WITHOUT_OWNED_REPORT',contradiction=True)
         files = report['files']
         if type(files) is not dict or any(type(n) is not str or n not in MATERIALS or not _info(v) for n, v in files.items()):
@@ -479,11 +497,18 @@ class _Evidence:
             else:
                 prerequisites &= self.raw_auth_markers == 0 and self.raw_bindings == 0 and not self.raw_closes
             if profile=='owned':
-                prerequisites &= (report['host_binding_modeled'] is True and report['host_blocked'] is False
+                host_operations=list(self.host_acks)
+                wait_valid=self.active_wait is None
+                if self.waits:
+                    wait_valid &= len(self.waits)==2 and [v[0] for v in self.waits]==['service','normal-return']
+                    wait_valid &= all(v[1]=='found' and type(v[2]) is int and 2<=v[2]<=40 for v in self.waits)
+                    wait_valid &= [v[5] for v in self.waits]==[3,len(self.acks)-1]
+                    for _,_,_,start,end,_ in reversed(self.waits):host_operations[start:end]=['INVENTORY']
+                prerequisites &= wait_valid and (report['host_binding_modeled'] is True and report['host_blocked'] is False
                     and report['cleanup_error_type'] is None and report['identity_queries']==2 and report['identity_raw_calls']==28
                     and 16930<=report['accepted_identity_bytes']<=33728
                     and report['owned_handles_opened']==report['owned_handles_closed']==3 and self.owned_bindings==1
-                    and not self.raw_bindings and not self.raw_closes and _host_sequence(self.host_acks)
+                    and not self.raw_bindings and not self.raw_closes and _host_sequence(host_operations)
                     and [n for op,n in self.host_positions if op=='NORMAL_IDENTITY_QUERY']==[0,len(self.acks)-1]
                     and [n for op,n in self.host_positions if op=='OPEN_HANDLE']==[0,3,len(self.acks)-1]
                     and [n for op,n in self.host_positions if op=='DISPOSE_RESOURCES']==[3,len(self.acks)-1,len(self.acks)]
