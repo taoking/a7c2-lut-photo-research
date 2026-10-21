@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import subprocess
 import sys
+import time
 import unittest
 from unittest.mock import patch
 
@@ -58,8 +59,9 @@ class CandidateTests(unittest.TestCase):
         for name in names-{'clock','sleep'}:
             self.assertEqual(inspect.signature(getattr(c._CandidateOps,name)),inspect.signature(getattr(o.m._NativeOps,name)),name)
         for name in ('clock','sleep'):
-            self.assertEqual(len(inspect.signature(getattr(c._CandidateOps,name)).parameters)-1,
-                             len(inspect.signature(getattr(o.m._NativeOps,name)).parameters))
+            # Python 3.12 does not expose signatures for these C builtins.
+            self.assertIs(getattr(o.m._NativeOps,name),getattr(time,'monotonic' if name=='clock' else 'sleep'))
+            self.assertEqual(len(inspect.signature(getattr(c._CandidateOps,name)).parameters),1 if name=='clock' else 2)
         with self.assertRaises(TypeError):c._CandidateOps(object())
 
     def test_resource_scope_74_files_on_same_service(self):
