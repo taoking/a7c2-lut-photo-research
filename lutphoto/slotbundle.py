@@ -116,7 +116,7 @@ def create(archive, directory, *, ap_path, cp_path, ram_path, saved_path, select
 
 
 @contextmanager
-def _open_review(archive, directory):
+def _open_bundle(archive, directory):
     """Read only the fixed bundle inventory; regenerate from its frozen inputs.
 
     No original external path, manifest-directed path, policy override or device
@@ -149,14 +149,21 @@ def _open_review(archive, directory):
         if any(observed[name] != expected[name] for name in LIMITS):
             raise ValueError('Frozen targets, inverse or review differ from regenerated result')
         reader.check()
-        yield policy, review, {'bundle_manifest_sha256': p.w.sha(raw),
-                               'target_review_sha256': review.report['target_review_sha256']}
+        yield policy, inputs, review, {'bundle_manifest_sha256': p.w.sha(raw),
+                                       'target_review_sha256': review.report['target_review_sha256']}
         reader.check()
     except BaseException as error:
         try: reader.close()
         except BaseException as cleanup: raise error from cleanup
         raise
     else: reader.close()
+
+
+@contextmanager
+def _open_review(archive, directory):
+    """Existing program/summary interface over the same locked frozen bytes."""
+    with _open_bundle(archive, directory) as (policy, _, review, binding):
+        yield policy, review, binding
 
 
 def inspect_directory(archive, directory):

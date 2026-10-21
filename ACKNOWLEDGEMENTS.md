@@ -72,3 +72,5 @@ USB 服务协议来自 [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-R
 第五十九轮[私人单槽事务包与独立重验](docs/SINGLE-SLOT-BUNDLE.md)复用上述固定来源及同一生成器，继续保留QAQLeonard/ma1co/ajalt署名与许可。新增私人持久化和读回/重建检查由本项目编写；含程序、设置、名称和逆向字节的包只在本人私人位置保存，不公开分发，不执行归档或目标代码。自制包和重新计算的哈希不构成真实来源、机内执行、恢复或色彩验收。
 
 第六十轮[程序worker离线绑定/编译](docs/PROGRAM-WORKER-OFFLINE.md)沿用QAQLeonard固定v2.1的nativebuild排序、程序C与请求/报告契约及ma1co/ajalt研究来源。新增包绑定、静态断言/ELF审阅和私有报告由本项目编写；原C原字节仅在私人临时目录编译，头/模块/缓存检查后删除，不公开分发，不执行归档Python或目标代码。自制路线编译和报告结构不构成真实机身/加载/恢复或色彩证据。
+
+第六十一轮[名称worker绑定/离线编译](docs/NAME-WORKER-OFFLINE.md)复用QAQLeonard固定v2.1的名称C/元数据/报告契约与既有ma1co/ajalt来源，保留全部固定清单与许可。新增包绑定和Asset/数组ABI断言由本项目编写；资源目标仍由原单槽生成器产生。固定C只在临时目录编译，不执行或分发；报告无资源哈希/作业ID的限制明确保留，不能据合成报告认定机身执行、资源读回或恢复。

@@ -326,6 +326,15 @@ def _compile_one(sources, kind, header, *, expected_windows=None):
         unit += '_Static_assert(sizeof(original_hashes)==64 && sizeof(final_hashes)==64 && sizeof(file_sizes)==16,"complete file metadata");\n'
         if expected_windows is not None:
             unit += f'_Static_assert(sizeof(windows)/sizeof(windows[0])=={expected_windows},"window count");\n'
+    else:
+        unit += '_Static_assert(sizeof(struct Asset)==80,"asset size");\n'
+        for name, offset in (('name', 0), ('size', 8), ('before', 12), ('after', 44)):
+            unit += f'_Static_assert(__builtin_offsetof(struct Asset,{name})=={offset},"asset {name}");\n'
+        unit += '_Static_assert(sizeof(u64)==8 && sizeof(u32)==4 && sizeof(unsigned short)==2,"integer widths");\n'
+        unit += '_Static_assert(sizeof(assets)/sizeof(assets[0])==68,"asset count");\n'
+        unit += '_Static_assert(sizeof(after_sizes)==272 && sizeof(old_counts)==272 && sizeof(label_ids)==24,"name metadata counts");\n'
+        unit += '_Static_assert(sizeof(old_pointers)==816 && sizeof(names)==384,"pointer and name arrays");\n'
+        unit += '_Static_assert(sizeof(ap_plain_hash)==32 && sizeof(ap_named_hash)==32 && sizeof(ap_size)==8,"complete AP metadata");\n'
     with tempfile.TemporaryDirectory(prefix='a7c2-worker-abi-') as temporary:
         root = Path(temporary); folder = root / kind; folder.mkdir()
         (folder / 'original.c').write_bytes(sources[member])
