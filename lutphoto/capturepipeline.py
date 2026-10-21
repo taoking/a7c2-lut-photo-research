@@ -17,6 +17,15 @@ class _Run(s._Run):
         self.archive, self.drivers = archive, (normal, service)
         self.auth, self.blocked = None, False
 
+    def make_auth(self, value):
+        return a.OfflineAuthFlow(self.archive, self.store, value, budget=self.channel.budget)
+
+    def close_handle(self, role):
+        self.peer.step('close-' + role)
+
+    def failure_close(self):
+        pass  # Raw-handle ownership, when present, overrides this local hook.
+
     def event(self, event, **details):
         try: self.store.event(event, **details)
         except BaseException:
@@ -44,11 +53,11 @@ class _Run(s._Run):
         self.normal_open = True
         self.initial = s._normal(value)
         self.stage = 'C1'
-        self.auth = a.OfflineAuthFlow(self.archive, self.store, value, budget=self.channel.budget)
+        self.auth = self.make_auth(value)
         try: self.auth.normal_auth(self.drivers[0])
         finally: self.sync_auth()
         self.normal_open = False
-        self.peer.step('close-normal')
+        self.close_handle('normal')
         service = self.call('service-observation', self.peer.observe_service)
         self.service_open = True
         try: self.auth.service_auth(service, self.drivers[1])
@@ -65,7 +74,7 @@ class _Run(s._Run):
         try: self.auth.stop()
         finally: self.sync_auth()
         self.service_open = False
-        self.peer.step('close-service')
+        self.close_handle('service')
         # INTENT must precede even the fake normal query, not just comparison.
         self.normal_open = True
         try: self.auth._observe_return(lambda: self.peer.normal(True))
@@ -102,17 +111,22 @@ def rehearse(archive, directory, peer, normal_driver, service_driver, *, resourc
     # Auth packets and material payload share quota; material wire overhead
     # remains separately bounded by OfflineChannel, never counted twice.
     channel.budget.limit += AUTH_ALLOWANCE
+    return _execute(directory, peer, lambda store: _Run(archive, store, peer, channel, policy, normal_driver, service_driver), resources=resources)
+
+
+def _execute(directory, peer, factory, *, resources):
+    """Shared lifecycle; factory is internal, never a public backend option."""
     store = run = None
     peer.step('global-lock-acquire')  # Model only, never open the system lock.
     try:
         store = Store(directory, events_limit=s.EVENTS_LIMIT)
-        run = _Run(archive, store, peer, channel, policy, normal_driver, service_driver)
+        run = factory(store)
         try:
             run.body(resources)
             if not run.returned or run.blocked or run.unknown or run.channel.active:
                 raise RuntimeError('Synthetic pipeline lacks a healthy completed return')
             if run.normal_open:
-                run.normal_open = False; peer.step('close-normal')
+                run.normal_open = False; run.close_handle('normal')
             run.event('READY_FOR_REPORT')
             for name, info in {**run.files, **store.documents}.items(): store.verify(name, info)
             result = run.report(True)
@@ -123,6 +137,7 @@ def rehearse(archive, directory, peer, normal_driver, service_driver, *, resourc
             if run.authenticated and not run.unknown and not run.blocked and not run.exit_attempted:
                 try: run.exit()
                 except BaseException: pass
+            run.failure_close()
             result = run.report(False, type(exc).__name__)
             try:
                 run.event('NEEDS_REVIEW', reason_type=type(exc).__name__, outcome_unknown=run.unknown)
@@ -134,9 +149,9 @@ def rehearse(archive, directory, peer, normal_driver, service_driver, *, resourc
         try:
             if run is not None:
                 if run.service_open:
-                    run.service_open = False; peer.step('close-service')
+                    run.service_open = False; run.close_handle('service')
                 if run.normal_open:
-                    run.normal_open = False; peer.step('close-normal')
+                    run.normal_open = False; run.close_handle('normal')
         finally:
             try:
                 if store is not None: store.close()

@@ -45,7 +45,7 @@ COMMON = {'schema', 'private_report', 'simulation_only', 'phase', 'reason_type',
     'journal_records', 'journal_head_sha256', 'commit', 'archive_sha256'}
 EVENTS = {'INTENT', 'ACK', 'STAGE', 'HOST_FILE_VERIFIED', 'SNAPSHOT_FORMAT_CHECKED', 'SYNTHETIC_PREFLIGHT',
     'PROGRAM_CONTENT_MATCHED', 'OBSERVATIONS_COMPLETE', 'NORMAL_OBSERVATION_MATCHED', 'SYNTHETIC_LOCK_ORDER',
-    'GUARD_ABSENCE_MODELED', 'NORMAL_SAME_SOURCE_MATCH_MODELED', 'READY_FOR_REPORT', 'NEEDS_REVIEW', 'RAW_AUTHENTICATION_MODELED'}
+    'GUARD_ABSENCE_MODELED', 'NORMAL_SAME_SOURCE_MATCH_MODELED', 'READY_FOR_REPORT', 'NEEDS_REVIEW', 'RAW_AUTHENTICATION_MODELED', 'RAW_HANDLES_BOUND_MODELED', 'RAW_HANDLE_CLOSED_MODELED'}
 
 
 class _Refused(ValueError):
@@ -202,10 +202,16 @@ class _Evidence:
         self.actual, self.count, self.head = {}, 0, '0' * 64
         self.orphans, self.unknown = 0, False
         self.raw_auth_markers = 0
+        self.raw_bindings, self.raw_closes = 0, {}
 
     def details_valid(self, event, details):
         if event in ('OBSERVATIONS_COMPLETE', 'NORMAL_OBSERVATION_MATCHED', 'NORMAL_SAME_SOURCE_MATCH_MODELED', 'READY_FOR_REPORT'):
             return not details
+        if event == 'RAW_HANDLES_BOUND_MODELED':
+            return (set(details)=={'owned_handles','same_service_handle'}
+                and type(details['owned_handles']) is int and details['owned_handles']==2 and details['same_service_handle'] is True)
+        if event == 'RAW_HANDLE_CLOSED_MODELED':
+            return set(details)=={'role'} and details['role'] in ('normal-initial','service')
         if event == 'RAW_AUTHENTICATION_MODELED':
             return (set(details) == {'accepted_auth_bytes', 'raw_calls'}
                 and type(details['accepted_auth_bytes']) is int and details['accepted_auth_bytes'] == 14448
@@ -266,6 +272,15 @@ class _Evidence:
                     self.problem('INVALID_MATERIAL_RECORD', contradiction=True); break
                 if file in self.verified: self.problem('DUPLICATE_MATERIAL_RECORD', contradiction=True)
                 self.verified[file] = expected
+            elif event == 'RAW_HANDLES_BOUND_MODELED':
+                self.raw_bindings += 1
+                if self.raw_bindings!=1 or self.acks or self.pending:
+                    self.problem('RAW_BINDING_OUT_OF_ORDER',contradiction=True)
+            elif event == 'RAW_HANDLE_CLOSED_MODELED':
+                role=details.get('role')
+                if self.raw_bindings!=1 or role in self.raw_closes:
+                    self.problem('RAW_CLOSE_WITHOUT_UNIQUE_BINDING',contradiction=True)
+                if type(role) is str: self.raw_closes[role]=(len(self.acks),bool(self.pending))
             elif event == 'RAW_AUTHENTICATION_MODELED':
                 self.raw_auth_markers += 1
                 if self.pending or self.acks != _ack_plan('pipeline', False)[:6] or self.raw_auth_markers != 1:
@@ -377,8 +392,11 @@ class _Evidence:
                     and report['authentication_phase'] == 'SYNTHETIC_RETURN_MATCHED'
                     and report['shared_budget_modeled'] is True and report['pipeline_blocked'] is False
                     and self.raw_auth_markers == 1)
+                if self.raw_bindings:
+                    prerequisites &= (self.raw_bindings==1 and self.raw_closes=={
+                        'normal-initial':(3,False),'service':(len(self.acks)-1,False)})
             else:
-                prerequisites &= self.raw_auth_markers == 0
+                prerequisites &= self.raw_auth_markers == 0 and self.raw_bindings == 0 and not self.raw_closes
             if not prerequisites or self.issues:
                 self.problem('COMPLETE_REPORT_WITH_INCOMPLETE_EVIDENCE', contradiction=True)
         else:

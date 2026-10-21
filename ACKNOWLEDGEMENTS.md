@@ -48,3 +48,5 @@ USB 服务协议来自 [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-R
 第四十六轮[认证错误传播离线适配](docs/CAPTURE-AUTH-OFFLINE.md)依据同一 QAQLeonard 固定包内 ma1co 的认证报文及兼容哈希行为；原 crypto.py 注明 [ajalt/python-sha1](https://github.com/ajalt/python-sha1)，这里一并保留来源，ma1co 完整 MIT 许可保持不变。[9 成员清单](research/upstream-auth.lock.json)仅记录来源指纹，不分发认证密钥、挑战或原始应答。新增严格原始长度/异常传播、总期限及一次退出只经过假驱动验证，未接入真实 USB 或改变旧安装器。
 
 第四十七轮[统一离线协调器](docs/CAPTURE-PIPELINE-OFFLINE.md)复用上述 QAQLeonard/ma1co/ajalt 来源的认证、固定材料与协议规则；新增共享预算、分别计数、失败冻结及第三种只读证据格式，不改变原协议及保护研究的贡献归属。只用假驱动/自制材料，无真实 USB 接入或新固件资产。
+
+第四十八轮[受限原始接口](docs/CAPTURE-RAW-OFFLINE.md)继续依据固定 QAQLeonard/ma1co/ajalt 的认证、读取与生命周期规则，新增同模拟句柄收发、明确结果类型/期限和单一关闭所有者。只读核对已安装 PyUSB 1.3.1 的原始计数/数组语义，未复制其源码或更换依赖；没有真实 USB、固件或机身资产。

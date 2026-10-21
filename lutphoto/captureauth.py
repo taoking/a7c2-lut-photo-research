@@ -233,19 +233,29 @@ class OfflineAuthFlow:
         if self.phase != 'NEW' or self.unknown or self.blocked: raise RuntimeError('Normal authentication cannot be replayed')
         if type(driver) is not SyntheticDriver or driver.pid != 0x0e8a:
             raise TypeError('Exact normal synthetic driver required')
+        self._normal_stage(driver)
+
+    def _normal_stage(self, driver):
+        # Internal reuse by the exact synthetic raw-handle adapter only.
         self.normal = _RawAuth(driver, self.keys, self.budget)
         self._action('auth-normal-start', self.normal.control, 'NORMAL_CONTROL_RETURNED')
         self._action('auth-normal-verify', self.normal.authenticate, 'WAIT_SERVICE')
 
     def service_auth(self, observation, driver):
         if self.phase != 'WAIT_SERVICE' or self.unknown or self.blocked: raise RuntimeError('No service transition allowance')
+        if type(driver) is not SyntheticDriver or driver.pid != 0x0336:
+            self.unknown = self.blocked = True; self.phase = 'NEEDS_REVIEW'
+            raise ValueError('Exact service synthetic driver required')
+        self._service_stage(observation, driver)
+
+    def _service_stage(self, observation, driver):
+        if self.phase != 'WAIT_SERVICE' or self.unknown or self.blocked: raise RuntimeError('No service transition allowance')
         try:
             if (type(observation) is not dict or set(observation) != {'bus', 'ports', 'pid', 'normal_count', 'service_count'}
                     or type(observation['pid']) is not int or observation['pid'] != 0x0336
                     or type(observation['normal_count']) is not int or observation['normal_count'] != 0
                     or type(observation['service_count']) is not int or observation['service_count'] != 1
-                    or _location(observation) != (self.initial.bus, self.initial.ports)
-                    or type(driver) is not SyntheticDriver or driver.pid != 0x0336):
+                    or _location(observation) != (self.initial.bus, self.initial.ports)):
                 raise ValueError('Service driver/unique same-port observation required')
         except BaseException:
             self.unknown = self.blocked = True; self.phase = 'NEEDS_REVIEW'
