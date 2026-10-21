@@ -4,6 +4,7 @@ Reuse slottarget's one generator and the existing private Store/Reader. This
 artifact contains private full programs, snapshots, names and inverse bytes.
 Never publish it. QAQLeonard/ma1co provenance: ACKNOWLEDGEMENTS.md.
 """
+from contextlib import contextmanager
 import os
 import struct
 import sys
@@ -114,7 +115,8 @@ def create(archive, directory, *, ap_path, cp_path, ram_path, saved_path, select
     return inspect_directory(archive, directory)
 
 
-def inspect_directory(archive, directory):
+@contextmanager
+def _open_review(archive, directory):
     """Read only the fixed bundle inventory; regenerate from its frozen inputs.
 
     No original external path, manifest-directed path, policy override or device
@@ -146,12 +148,21 @@ def inspect_directory(archive, directory):
         expected = _payloads(inputs, review)
         if any(observed[name] != expected[name] for name in LIMITS):
             raise ValueError('Frozen targets, inverse or review differ from regenerated result')
-        reader.check(); result = _summary(review)
+        reader.check()
+        yield policy, review, {'bundle_manifest_sha256': p.w.sha(raw),
+                               'target_review_sha256': review.report['target_review_sha256']}
+        reader.check()
     except BaseException as error:
         try: reader.close()
         except BaseException as cleanup: raise error from cleanup
         raise
     else: reader.close()
+
+
+def inspect_directory(archive, directory):
+    """Return the existing summary only after the shared reader closes well."""
+    with _open_review(archive, directory) as (_, review, _):
+        result = _summary(review)
     return result
 
 

@@ -63,3 +63,5 @@ CP 代码身份归一化只清零文件 `[0x8008, 0x9c9a)` 的 24 字节校验�
 **文件≤64 KiB 不等于加载只需≤64 KiB 内存。** 这些 ELF 检查只约束文件声明，未证明 Sony 实际加载器怎样分配、清零 BSS、重定位、设权限和维护生命周期。`camera_loader_abi_verified` 与 `firmware_bound_worker_verified` 均固定 false。产物 SHA/源与断言 SHA 留在忽略的本地报告，不提供模块下载或相机加载命令。
 
 N3 仍部分完成。第三十六轮已增加[BK4 只读解析/设置比较及主机加载链边界审阅](BK4-OFFLINE.md)，Sony 加载行为与同机身关联仍未证明；第三十七轮已有[完整程序身份/描述符只读入口及材料清单](PROGRAM-IDENTITY.md)，第三十八轮已有[描述符/快照只读绑定](SETTINGS-BINDING.md)，第三十九轮已有[表/名称资源材料清单](IMPORT-MATERIALS.md)，真实程序/BK4/资源正例、新鲜同机身来源和完整事务仍缺，不自行搜索私人备份，不在缺资产时模拟身份。实际全局相机锁/USB、设备恢复、双独立介质备份与 N4 物理/色彩验收继续后置，进入前提示。进度见[总计划](../plan.md)、[交接](../research/HANDOFF.md)。
+
+第六十轮另增[程序worker绑定/离线编译与报告检查](PROGRAM-WORKER-OFFLINE.md)：复用私人单槽包完整重建和此处编译/ABI/ELF检查，固定C不改，新增Window/元数据断言。新入口不再只使用此模块的微型ABI fixture，但本轮所有正例仍是自制程序/策略，真实材料、Sony加载及执行未证；原本模块的CLI与fixture语义保留。

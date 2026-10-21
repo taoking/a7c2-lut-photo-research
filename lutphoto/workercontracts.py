@@ -304,38 +304,59 @@ def inspect_loads(raw):
             'relative_addends_in_load_ranges': True}
 
 
-def compile_sources(sources):
+def _compile_one(sources, kind, header, *, expected_windows=None):
+    """Compile pinned C in private temporary storage; inspect, never load it."""
     from elftools.common.exceptions import ELFError
+    members = {'program': 'src/fl23/native/installer.c', 'names': 'src/looks/native/names.c'}
+    if kind not in members or type(header) is not bytes or not 0 < len(header) <= 1024 * 1024:
+        raise ValueError('Bounded worker metadata required')
+    header.decode('ascii')
+    if expected_windows is not None and (kind != 'program' or type(expected_windows) is not int
+                                         or not 1 <= expected_windows <= 4096):
+        raise ValueError('Bounded program window count required')
     command = customhost.compiler_command('zig')
     if command is None:
         raise ValueError('Audited Zig 0.13.0 environment required')
-    results = {}
+    member = members[kind]; unit = assertion_unit(kind)
+    if kind == 'program':
+        unit += '_Static_assert(sizeof(struct Window)==32,"window size");\n'
+        for name, offset in (('offset', 0), ('length', 8), ('chip', 12), ('before', 16), ('after', 24)):
+            unit += f'_Static_assert(__builtin_offsetof(struct Window,{name})=={offset},"window {name}");\n'
+        unit += '_Static_assert(sizeof(u64)==8 && sizeof(u32)==4,"integer widths");\n'
+        unit += '_Static_assert(sizeof(original_hashes)==64 && sizeof(final_hashes)==64 && sizeof(file_sizes)==16,"complete file metadata");\n'
+        if expected_windows is not None:
+            unit += f'_Static_assert(sizeof(windows)/sizeof(windows[0])=={expected_windows},"window count");\n'
     with tempfile.TemporaryDirectory(prefix='a7c2-worker-abi-') as temporary:
-        root = Path(temporary)
-        for kind, member in (('program', 'src/fl23/native/installer.c'), ('names', 'src/looks/native/names.c')):
-            folder = root / kind; folder.mkdir()
-            (folder / 'original.c').write_bytes(sources[member])
-            (folder / 'sha256.h').write_bytes(sources['src/fl23/native/sha256.h'])
-            header = fixture_header(kind); unit = assertion_unit(kind)
-            (folder / 'fixture.h').write_text(header); (folder / 'assertions.c').write_text(unit)
-            env = os.environ.copy()
-            env['ZIG_GLOBAL_CACHE_DIR'] = str(root / 'global-cache'); env['ZIG_LOCAL_CACHE_DIR'] = str(root / 'local-cache')
-            flags = ['cc', '-target', 'aarch64-linux-gnu', '-shared', '-fPIC', '-O2', '-ffreestanding',
-                     '-fno-builtin', '-fno-stack-protector', '-fno-unwind-tables', '-fno-asynchronous-unwind-tables',
-                     '-nostdlib', '-g0', '-Wl,--strip-debug', '-Wl,--no-undefined', '-Wl,-Bsymbolic', '-Wl,-z,noexecstack',
-                     '-I', str(folder), '-DPATCH_MANIFEST="fixture.h"', '-o', str(folder / 'worker.elf'), str(folder / 'assertions.c')]
-            process = subprocess.run(command + flags, env=env, capture_output=True, timeout=60)
-            if process.returncode:
-                raise ValueError('Pinned C source/ABI compilation failed; diagnostics omitted')
-            raw = customcontracts.bounded_read(folder / 'worker.elf', 65536)
-            try:
-                elf_report = {**customhost.inspect_elf(raw, shared=True), **inspect_loads(raw)}
-            except ELFError as exc:
-                raise ValueError('Malformed compiled worker ELF') from exc
-            results[kind] = {**elf_report,
-                             'upstream_C_source_sha256': sha(sources[member]), 'fixture_header_sha256': sha(header.encode()),
-                             'assertions_sha256': sha(unit.encode()), 'compile_time_ABI_assertions_passed': True,
-                             'metadata_kind': 'own synthetic fixture only', 'target_code_executed': False}
+        root = Path(temporary); folder = root / kind; folder.mkdir()
+        (folder / 'original.c').write_bytes(sources[member])
+        (folder / 'sha256.h').write_bytes(sources['src/fl23/native/sha256.h'])
+        (folder / 'fixture.h').write_bytes(header); (folder / 'assertions.c').write_text(unit)
+        env = os.environ.copy()
+        env['ZIG_GLOBAL_CACHE_DIR'] = str(root / 'global-cache'); env['ZIG_LOCAL_CACHE_DIR'] = str(root / 'local-cache')
+        flags = ['cc', '-target', 'aarch64-linux-gnu', '-shared', '-fPIC', '-O2', '-ffreestanding',
+                 '-fno-builtin', '-fno-stack-protector', '-fno-unwind-tables', '-fno-asynchronous-unwind-tables',
+                 '-nostdlib', '-g0', '-Wl,--strip-debug', '-Wl,--no-undefined', '-Wl,-Bsymbolic', '-Wl,-z,noexecstack',
+                 '-I', str(folder), '-DPATCH_MANIFEST="fixture.h"', '-o', str(folder / 'worker.elf'), str(folder / 'assertions.c')]
+        process = subprocess.run(command + flags, env=env, capture_output=True, timeout=60)
+        if process.returncode:
+            raise ValueError('Pinned C source/ABI compilation failed; diagnostics omitted')
+        raw = customcontracts.bounded_read(folder / 'worker.elf', 65536)
+        try:
+            elf_report = {**customhost.inspect_elf(raw, shared=True), **inspect_loads(raw)}
+        except ELFError as exc:
+            raise ValueError('Malformed compiled worker ELF') from exc
+        result = {**elf_report, 'upstream_C_source_sha256': sha(sources[member]),
+                  'manifest_header_sha256': sha(header), 'assertions_sha256': sha(unit.encode()),
+                  'compile_time_ABI_assertions_passed': True, 'target_code_executed': False}
+    return result
+
+
+def compile_sources(sources):
+    results = {}
+    for kind in ('program', 'names'):
+        result = _compile_one(sources, kind, fixture_header(kind).encode())
+        result['fixture_header_sha256'] = result.pop('manifest_header_sha256')
+        results[kind] = {**result, 'metadata_kind': 'own synthetic fixture only'}
     return results
 
 
