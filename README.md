@@ -33,7 +33,7 @@
 
 ## LUT 照片开发进度
 
-主线是上游v2.1的原生Creative Look拟合。N1[固定源码审计](docs/UPSTREAM-V2.1-AUDIT.md)完成；N2[拟合/预测](docs/NATIVE-FIT-OFFLINE.md)和[配对标定/冻结验收](docs/NATIVE-VALIDATION.md)离线工具已具备，真实ST与相机精度仍待N4。N3已有完整程序/描述符、设置/资源及来源检查；[公开首次内部采集入口](docs/CAPTURE-FIRST-USE.md)已接通固定读取、独占/信号收尾和独立回执，**只用自制SDK/材料完成离线验证，尚无本项目首次真机采集正例**。另有[单槽目标/逆向验证](docs/SINGLE-SLOT-TARGET.md)及[私人事务包/独立重验](docs/SINGLE-SLOT-BUNDLE.md)，连接N2表、设置投影和68名称资源，包内含完整私人输入/目标/逆向；新增[程序worker绑定/离线编译与报告检查](docs/PROGRAM-WORKER-OFFLINE.md)，固定C仅在临时目录编译并删除，未执行；第六十一轮另完成[名称worker绑定/编译/四模式报告检查](docs/NAME-WORKER-OFFLINE.md)，D1离线完成；完整设置、统一演练和机身事务/写入/恢复仍未接通。
+主线是上游v2.1的原生Creative Look拟合。N1[固定源码审计](docs/UPSTREAM-V2.1-AUDIT.md)完成；N2[拟合/预测](docs/NATIVE-FIT-OFFLINE.md)和[配对标定/冻结验收](docs/NATIVE-VALIDATION.md)离线工具已具备，真实ST与相机精度仍待N4。N3已有完整程序/描述符、设置/资源及来源检查；[公开首次内部采集入口](docs/CAPTURE-FIRST-USE.md)已接通固定读取、独占/信号收尾和独立回执，**只用自制SDK/材料完成离线验证，尚无本项目首次真机采集正例**。另有[单槽目标/逆向验证](docs/SINGLE-SLOT-TARGET.md)及[私人事务包/独立重验](docs/SINGLE-SLOT-BUNDLE.md)，连接N2表、设置投影和68名称资源，包内含完整私人输入/目标/逆向；新增[程序worker绑定/离线编译与报告检查](docs/PROGRAM-WORKER-OFFLINE.md)，固定C仅在临时目录编译并删除，未执行；第六十一轮另完成[名称worker绑定/编译/四模式报告检查](docs/NAME-WORKER-OFFLINE.md)，D1离线完成；第六十二轮完成[设置单元正反向方案/快照阶段核对](docs/SETTINGS-PLAN-OFFLINE.md)，D2离线完成；统一演练、实际属性保存和机身事务/写入/恢复仍未接通。
 
 首次采集只支持本人ILCE-7CM2原厂2.01及固定完整AP/CP指纹，要求实际版本/电量、管理员权限和新私人输出；服务认证/选读路径会改变临时状态，不加载模块或写程序/保存设置。材料检查点、内部终态、回执传递及CLI退出分开判断，见[证据/回执](docs/CAPTURE-EVIDENCE.md)。候选review仍是无设备操作的源码审阅，不能改JSON当采集许可。当前本人相机保留2.00，卡副本不是内部备份，不需现在升级/连接或读移动盘；实采前另提示。
 
