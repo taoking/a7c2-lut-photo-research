@@ -60,3 +60,5 @@ USB 服务协议来自 [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-R
 第五十二轮[原生协调候选](docs/CAPTURE-NATIVE-CANDIDATE.md)继续使用 QAQLeonard/ma1co/ajalt 的固定来源、现有认证/读取/所有权实现和完整许可。新增代码由本项目编写；NativeOps 形状的假能力及被动枚举演练不构成实际 SDK、协议或机身验证。只输出来源/请求摘要，不分发认证材料、原厂程序或个人数据。
 
 第五十三轮[假SDK组合验证](docs/CAPTURE-NATIVE-OFFLINE.md)沿用QAQLeonard/ma1co/ajalt固定来源和既有许可。新增自制SDK/系统夹具及所有权测试由本项目编写，不复制或执行USB运行库/归档代码，不分发密钥、机身数据或原厂程序；不构成真实SDK/相机验证。
+
+第五十四轮[信号取消与现场保留](docs/CAPTURE-SIGNALS-OFFLINE.md)由本项目编写，沿用QAQLeonard/ma1co/ajalt既有协议来源和许可；使用Python标准库及自制子进程验证，不复制/执行归档或USB运行库，不发布认证材料或机身数据，不构成实际SDK/相机验证。
