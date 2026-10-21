@@ -95,7 +95,15 @@ def create(archive, directory, *, ap_path, cp_path, ram_path, saved_path, select
     directory = _new_directory(directory)
     policy, runtime, inputs = t._prepare_files(archive, ap_path, cp_path, ram_path, saved_path,
                                               selection_path, resources_path, ram_roles, saved_roles)
-    review = t._generate(policy, runtime, inputs); payloads = _payloads(inputs, review)
+    review = t._generate(policy, runtime, inputs)
+    _freeze(directory, policy, inputs, review)
+    del inputs, review, runtime
+    return inspect_directory(archive, directory)
+
+
+def _freeze(directory, policy, inputs, review):
+    """Shared private serialization; public create still loads the fixed policy."""
+    payloads = _payloads(inputs, review)
     total = sum(len(raw) for raw in payloads.values())
     if total + 131072 > 512 * MIB: raise ValueError('Bundle exceeds independent reader budget')
     store = Store(directory)
@@ -109,10 +117,6 @@ def create(archive, directory, *, ap_path, cp_path, ram_path, saved_path, select
         except BaseException as cleanup: raise error from cleanup
         raise
     else: store.close()
-    # Release the input/target copies before the independent reader reconstructs
-    # them. The closed job is never reopened for writing.
-    del inputs, review, payloads, runtime
-    return inspect_directory(archive, directory)
 
 
 @contextmanager
@@ -122,7 +126,30 @@ def _open_bundle(archive, directory):
     No original external path, manifest-directed path, policy override or device
     is used. A directory owner can rebuild a different valid bundle; no signature.
     """
-    policy = p._load_policy(archive); reader = i._Reader(directory)
+    policy = p._load_policy(archive)
+    with _read_frozen(directory, policy) as (inputs, observed, binding, check):
+        identity = p._identify(inputs.ap, inputs.cp, policy)
+        runtime = t._runtime(archive, policy) if identity['first_import'] else None
+        review = _regenerate(policy, runtime, inputs, observed)
+        check()
+        yield policy, inputs, review, {**binding, 'target_review_sha256': review.report['target_review_sha256']}
+
+
+def _regenerate(policy, runtime, inputs, observed):
+    review = t._generate(policy, runtime, inputs)
+    if observed != _payloads(inputs, review):
+        raise ValueError('Frozen targets, inverse or review differ from regenerated result')
+    return review
+
+
+@contextmanager
+def _read_frozen(directory, policy):
+    """Locked bytes only; caller must regenerate before consuming any targets.
+
+    Internal reuse for the closed self-generated demo; no CLI policy override.
+    The production reader above always obtains its policy from the pinned archive.
+    """
+    reader = i._Reader(directory)
     try:
         if reader.inventory != set(LIMITS) | {MANIFEST, 'session.lock'} or set(reader.dirs) != {'', *i.FOLDERS}:
             raise ValueError('Incomplete or extra bundle contents')
@@ -142,15 +169,7 @@ def _open_bundle(archive, directory):
         core = {attr: observed[path] for path, (attr, _) in CORE.items()}
         inputs = t._Inputs(**core, resources={n: observed['resources/' + n] for n in c.RESOURCE_FILES},
                            ram_roles=roles['ram'], saved_roles=roles['saved'])
-        identity = p._identify(inputs.ap, inputs.cp, policy)
-        runtime = t._runtime(archive, policy) if identity['first_import'] else None
-        review = t._generate(policy, runtime, inputs)
-        expected = _payloads(inputs, review)
-        if any(observed[name] != expected[name] for name in LIMITS):
-            raise ValueError('Frozen targets, inverse or review differ from regenerated result')
-        reader.check()
-        yield policy, inputs, review, {'bundle_manifest_sha256': p.w.sha(raw),
-                                       'target_review_sha256': review.report['target_review_sha256']}
+        yield inputs, observed, {'bundle_manifest_sha256': p.w.sha(raw)}, reader.check
         reader.check()
     except BaseException as error:
         try: reader.close()

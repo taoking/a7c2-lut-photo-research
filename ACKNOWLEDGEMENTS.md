@@ -76,3 +76,5 @@ USB 服务协议来自 [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-R
 第六十一轮[名称worker绑定/离线编译](docs/NAME-WORKER-OFFLINE.md)复用QAQLeonard固定v2.1的名称C/元数据/报告契约与既有ma1co/ajalt来源，保留全部固定清单与许可。新增包绑定和Asset/数组ABI断言由本项目编写；资源目标仍由原单槽生成器产生。固定C只在临时目录编译，不执行或分发；报告无资源哈希/作业ID的限制明确保留，不能据合成报告认定机身执行、资源读回或恢复。
 
 第六十二轮[设置单元方案/快照核对](docs/SETTINGS-PLAN-OFFLINE.md)按QAQLeonard固定v2.1的devicesettings/devicejob流程整理逐属性读写/保存及顺序要求，复用已署名的单槽目标、ma1co BK4解析和原设置比较模块，原vendored源码/许可不改。新增私人属性方案与解码映射逆向/快照检查由本项目编写；不导入上游设备代码、不重写完整BK4或执行相机操作，真实保存/恢复仍未证。
+
+第六十三轮[统一离线入口/演练](docs/OFFLINE-WORKFLOW.md)由本项目编写，复用已署名的QAQLeonard原生拟合、固定程序/名称元数据及设置语义、ma1co BK4研究和ajalt既有来源/许可；不改上游锁和vendored源码。默认暖色CUBE/图/微型程序/BK4包裹/UXC全由数学规则自制，不分发原厂材料、密钥或机内模块；演示不能进入生产策略，不构成实际SDK、机身写入/恢复或Sony ST色彩验收。
