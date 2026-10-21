@@ -1,8 +1,8 @@
 """Offline single-slot program/resource targets and scoped settings inverse.
 
 QAQLeonard's pinned device_layout/six/devicesettings rules; ma1co BK4 parsing.
-See ACKNOWLEDGEMENTS.md. No archive Python execution, USB, worker or payload
-export. Full program targets exist only in memory, never as firmware files.
+See ACKNOWLEDGEMENTS.md. No archive Python execution, USB or worker. This CLI
+exports only a summary; slotbundle reuses the same private in-memory result.
 """
 import argparse
 from dataclasses import dataclass, replace
@@ -156,10 +156,13 @@ def _programs(ap, cp, slot, table, policy, runtime=None):
     return {'AP': target_ap, 'CP': target_cp}, transitions, identity, target_identity
 
 
-def _scope_sha(scoped):
-    value = {chip: {str(k): {'attr': v.attr, 'data': v.data.hex(), 'reset': None if v.reset_data is None else v.reset_data.hex(),
+def _scope_value(scoped):
+    return {chip: {str(k): {'attr': v.attr, 'data': v.data.hex(), 'reset': None if v.reset_data is None else v.reset_data.hex(),
                             'max_size': v.max_size} for k, v in rows.items()} for chip, rows in scoped.items()}
-    return p.w.sha(m._canonical(value))
+
+
+def _scope_sha(scoped):
+    return p.w.sha(m._canonical(_scope_value(scoped)))
 
 
 def _settings(bindings, ram, saved, ram_scope, saved_scope):
@@ -194,33 +197,79 @@ def _settings(bindings, ram, saved, ram_scope, saved_scope):
                             'other_runtime_groups_compared': False}
 
 
-def check_files(archive, ap_path, cp_path, ram_path, saved_path, selection_path, resources_path, ram_roles, saved_roles):
-    rows, selection_sha = m._selection(selection_path)
+@dataclass(frozen=True)
+class _Inputs:
+    ap: bytes
+    cp: bytes
+    ram: bytes
+    saved: bytes
+    selection: bytes
+    candidate: bytes
+    table: bytes
+    resources: dict
+    ram_roles: dict
+    saved_roles: dict
+
+
+@dataclass(frozen=True)
+class _Review:
+    report: dict
+    programs: dict
+    transitions: dict
+    settings: dict
+    resources: dict
+    resource_inverses: dict
+
+
+def _prepare_files(archive, ap_path, cp_path, ram_path, saved_path, selection_path, resources_path, ram_roles, saved_roles):
+    selection = c.bounded_read(selection_path, m.MAX_JSON_FILE)
+    rows, _ = m._selection_bytes(selection)
     if len(rows) != 1: raise ValueError('Exactly one selected slot required')
-    slot, (relative, name) = next(iter(rows.items()))
+    slot, (relative, _) = next(iter(rows.items()))
     policy = p._load_policy(archive)
     ap = p._read_program(ap_path, {r.ap_bytes for r in policy.sources})
     cp = p._read_program(cp_path, {r.cp_bytes for r in policy.sources})
     identity = p._identify(ap, cp, policy); bindings = p._descriptor_bindings(ap, [slot], policy)
-    ram, ram_scope, ram_report = s._snapshot(ram_path, dict(ram_roles))
-    saved, saved_scope, saved_report = s._snapshot(saved_path, dict(saved_roles))
+    ram = c.bounded_read(ram_path, s.bk4.MAX_SNAPSHOT); saved = c.bounded_read(saved_path, s.bk4.MAX_SNAPSHOT)
+    rd, rs, _ = s._snapshot_bytes(ram, dict(ram_roles)); sd, ss, _ = s._snapshot_bytes(saved, dict(saved_roles))
+    s._check_values(bindings, rd, sd, rs, ss)
+    directory = m._relative_directory(Path(selection_path).parent, relative)
+    metadata, table = m._candidate_content(directory, policy.commit)
+    candidate = c.bounded_read(directory / 'candidate.json', m.MAX_JSON_FILE)
+    if p.w.sha(candidate) != metadata['candidate_sha256']: raise ValueError('Candidate changed while freezing inputs')
+    resources = {path.name: c.bounded_read(path, c.MAX_RESOURCE) for path in c._resource_files(resources_path)}
+    inputs = _Inputs(ap, cp, ram, saved, selection, candidate, table, resources, dict(ram_roles), dict(saved_roles))
+    return policy, _runtime(archive, policy) if identity['first_import'] else None, inputs
+
+
+def _generate(policy, runtime, inputs):
+    """The sole bytes-to-target implementation, shared by summary and bundle."""
+    if type(inputs) is not _Inputs: raise TypeError('Exact frozen input container required')
+    rows, selection_sha = m._selection_bytes(inputs.selection)
+    if len(rows) != 1: raise ValueError('Exactly one selected slot required')
+    slot, (relative, name) = next(iter(rows.items())); m._relative_parts(relative)
+    ap, cp = inputs.ap, inputs.cp
+    identity = p._identify(ap, cp, policy); bindings = p._descriptor_bindings(ap, [slot], policy)
+    ram, ram_scope, ram_report = s._snapshot_bytes(inputs.ram, inputs.ram_roles)
+    saved, saved_scope, saved_report = s._snapshot_bytes(inputs.saved, inputs.saved_roles)
     values = s._check_values(bindings, ram, saved, ram_scope, saved_scope)
-    candidate, table = m._candidate_content(m._relative_directory(Path(selection_path).parent, relative), policy.commit)
-    _, transitions, _, target_identity = _programs(ap, cp, slot, table, policy,
-                                                       _runtime(archive, policy) if identity['first_import'] else None)
-    _, _, settings = _settings(bindings, ram, saved, ram_scope, saved_scope)
-    resources = {}; counts = set(); layout = m._layout(identity)
-    for path in c._resource_files(resources_path):
-        raw = c.bounded_read(path, c.MAX_RESOURCE)
+    candidate, table = m._candidate_bytes(inputs.candidate, inputs.table, policy.commit)
+    targets, transitions, _, target_identity = _programs(ap, cp, slot, table, policy, runtime)
+    _, scopes, settings = _settings(bindings, ram, saved, ram_scope, saved_scope)
+    resources = {}; resource_targets = {}; inverses = {}; counts = set(); layout = m._layout(identity)
+    if type(inputs.resources) is not dict or set(inputs.resources) != set(c.RESOURCE_FILES):
+        raise ValueError('Exactly the pinned resource set required')
+    for name_resource in c.RESOURCE_FILES:
+        raw = inputs.resources[name_resource]
         report, target, inverse = c._resource_target(raw, {slot: name}, layout)
-        # Bind the inverse to this exact target, not a subsequently reread file.
         if c.resources.inverse(target, inverse) != raw: raise ValueError('Resource inverse differs')
-        resources[path.name] = report; counts.add(report['before_count'])
+        resources[name_resource] = report; counts.add(report['before_count'])
+        resource_targets[name_resource] = target; inverses[name_resource] = inverse
     if len(counts) != 1: raise ValueError('Mixed resource index layouts')
-    programs = {chip: {'bytes': t.size, 'before_sha256': t.before_sha, 'target_sha256': t.after_sha,
+    programs = {chip: {'bytes': transition.size, 'before_sha256': transition.before_sha, 'target_sha256': transition.after_sha,
                        'restored_sha256': p.w.sha(ap if chip == 'AP' else cp),
-                       'window_count': len(t.changes), 'window_bytes': sum(len(r.before) for r in t.changes),
-                       'exact_forward_and_inverse_verified': True} for chip, t in transitions.items()}
+                       'window_count': len(transition.changes), 'window_bytes': sum(len(r.before) for r in transition.changes),
+                       'exact_forward_and_inverse_verified': True} for chip, transition in transitions.items()}
     material = {'commit': policy.commit, 'archive_sha256': policy.archive_sha, 'selected_slot': slot,
                 'selection_sha256': selection_sha, 'name_utf8_sha256': p.w.sha(name.encode()), 'candidate': candidate,
                 'source_identity': identity, 'target_identity': target_identity, 'programs': programs,
@@ -228,7 +277,7 @@ def check_files(archive, ap_path, cp_path, ram_path, saved_path, selection_path,
                 'settings': settings, 'label_layout_derived_from_program': layout, 'resources': resources,
                 'unselected_table_reference': 'canonical-zero-runtime' if identity['first_import'] else 'input-program',
                 'unselected_tables_and_checksums_preserved': 5}
-    return {**p._boundary(), 'schema': SCHEMA, **material, 'target_review_sha256': p.w.sha(m._canonical(material)),
+    report = {**p._boundary(), 'schema': SCHEMA, **material, 'target_review_sha256': p.w.sha(m._canonical(material)),
             'complete_program_transition_verified': True, 'scoped_settings_transition_verified': True,
             'complete_settings_transition_verified': False, 'resource_inverse_checked_in_memory': True,
             'same_capture_provenance_verified': False, 'snapshot_freshness_verified': False,
@@ -236,6 +285,14 @@ def check_files(archive, ap_path, cp_path, ram_path, saved_path, selection_path,
             'independent_backups_verified': False, 'native_worker_generated': False, 'camera_deployment_enabled': False,
             'firmware_or_settings_write_plan_enabled': False, 'payloads_exported': False,
             'private_paths_names_keys_values_or_windows_in_report': False}
+    scoped = {name_snapshot: {'before': _scope_value(before), 'target': _scope_value(after), 'inverse': _scope_value(before)}
+              for name_snapshot, before, after in (('ram', ram_scope, scopes[0]), ('saved', saved_scope, scopes[1]))}
+    return _Review(report, targets, transitions, scoped, resource_targets, inverses)
+
+
+def check_files(archive, ap_path, cp_path, ram_path, saved_path, selection_path, resources_path, ram_roles, saved_roles):
+    return _generate(*_prepare_files(archive, ap_path, cp_path, ram_path, saved_path, selection_path, resources_path,
+                                    ram_roles, saved_roles)).report
 
 
 def main(argv=None):

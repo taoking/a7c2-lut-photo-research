@@ -15,7 +15,10 @@ from .io import write_bytes_new
 
 
 def _snapshot(path, roles):
-    raw = c.bounded_read(path, bk4.MAX_SNAPSHOT)
+    return _snapshot_bytes(c.bounded_read(path, bk4.MAX_SNAPSHOT), roles)
+
+
+def _snapshot_bytes(raw, roles):
     images = bk4.parse_snapshot(raw)
     decoded, scoped = bk4.project(images, roles)
     return c.snapshot(decoded), scoped, {'sha256': p.w.sha(raw), 'bytes': len(raw),

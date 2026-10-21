@@ -26,21 +26,26 @@ def _json_file(path):
     return c.decode_json(raw), p.w.sha(raw)
 
 
-def _relative_directory(base, value):
+def _relative_parts(value):
     if (not isinstance(value, str) or not 1 <= len(value) <= 512 or '\\' in value
             or any(ord(char) < 32 for char in value) or any(part in ('', '.', '..') for part in value.split('/'))
             or Path(value).is_absolute()):
         raise ValueError('Explicit bounded relative candidate directory required')
+    return tuple(value.split('/'))
+
+
+def _relative_directory(base, value):
     directory = Path(base)
-    for part in (None, *value.split('/')):
+    for part in (None, *_relative_parts(value)):
         if part is not None: directory /= part
         if directory.is_symlink() or not directory.is_dir():
             raise ValueError('Candidate directory must be plain, without relative symlinks')
     return directory
 
 
-def _selection(path):
-    value, fingerprint = _json_file(path)
+def _selection_bytes(raw):
+    if type(raw) is not bytes or len(raw) > MAX_JSON_FILE: raise ValueError('Bounded selection bytes required')
+    value, fingerprint = c.decode_json(raw), p.w.sha(raw)
     if (not isinstance(value, dict) or set(value) != {'schema', 'slots'} or value['schema'] != SELECTION
             or not isinstance(value['slots'], dict) or not 1 <= len(value['slots']) <= 6):
         raise ValueError('Invalid selected material schema')
@@ -53,6 +58,10 @@ def _selection(path):
     return rows, fingerprint
 
 
+def _selection(path):
+    return _selection_bytes(c.bounded_read(path, MAX_JSON_FILE))
+
+
 def _candidate_content(directory, commit):
     """Return checked metadata and the same observed table for offline targets."""
     found = set()
@@ -62,7 +71,13 @@ def _candidate_content(directory, commit):
             if len(found) > 2: raise ValueError('Expected only two N2 candidate files')
     if found != {'candidate.json', 'correction.table'}:
         raise ValueError('Expected N2 candidate.json and correction.table')
-    data, candidate_sha = _json_file(directory / 'candidate.json')
+    return _candidate_bytes(c.bounded_read(directory / 'candidate.json', MAX_JSON_FILE),
+                            c.bounded_read(directory / 'correction.table', 1215), commit)
+
+
+def _candidate_bytes(metadata, raw, commit):
+    if type(metadata) is not bytes or len(metadata) > MAX_JSON_FILE: raise ValueError('Bounded candidate bytes required')
+    data, candidate_sha = c.decode_json(metadata), p.w.sha(metadata)
     if (not isinstance(data, dict) or data.get('schema') != CANDIDATE
             or type(data.get('adapter_version')) is not int or data['adapter_version'] != 1
             or data.get('upstream_commit') != commit or data.get('actual_camera_accuracy_verified') is not False
@@ -74,8 +89,7 @@ def _candidate_content(directory, commit):
             or table['layout'] != TABLE_LAYOUT):
         raise ValueError('Unsupported native table descriptor')
     p.w.hash_bytes(table['sha256'])
-    raw = c.bounded_read(directory / 'correction.table', 1215)
-    if len(raw) != 1215 or p.w.sha(raw) != table['sha256'] or any(64 <= byte < 192 for byte in raw):
+    if type(raw) is not bytes or len(raw) != 1215 or p.w.sha(raw) != table['sha256'] or any(64 <= byte < 192 for byte in raw):
         raise ValueError('Native table size/hash/signed range differs')
     provenance = data.get('provenance')
     if not isinstance(provenance, dict): raise ValueError('N2 provenance fingerprints required')
