@@ -1,7 +1,8 @@
-"""One offline CUBE-to-private-bundle workflow; no camera or device executor.
+"""Offline CUBE preview and private-bundle workflows; no camera executor.
 
 QAQLeonard/ma1co algorithm and layout provenance: ACKNOWLEDGEMENTS.md.
 demo generates every source itself; build accepts only the pinned real policy.
+preview fits/renders an explicit project without any program or bundle inputs.
 """
 import os
 import struct
@@ -42,24 +43,97 @@ def _fit(root, project, photo, *, assume_srgb=False, masks=None, validation_lock
     return evaluation
 
 
-def _fit_binding(root, project, photo, inputs, evaluation, validation_lock):
+def _reference_binding(root, project, photo, evaluation, validation_lock):
     from . import nativefit as nf
-    # Match the frozen candidate to the explicit project/model and rendered image,
-    # rather than accepting a loose N2 JSON alongside an unrelated private bundle.
     _, _, _, _, candidate_sha = nf.load_candidate(project, root / 'candidate/candidate.json')
-    candidate, _ = nf.read_json(root / 'candidate/candidate.json')
-    if (candidate_sha != program.w.sha(inputs.candidate) or
+    raw = b.c.bounded_read(root / 'candidate/candidate.json', b.m.MAX_JSON_FILE)
+    table = b.c.bounded_read(root / 'candidate/correction.table', 1215)
+    candidate = b.c.decode_json(raw)
+    if (candidate_sha != program.w.sha(raw) or
+            program.w.sha(table) != candidate['table']['sha256'] or
             evaluation['candidate_sha256'] != candidate_sha or
             nf.file_digest(photo) != evaluation['input_sha256']):
-        raise ValueError('Fit, frozen bundle or reference image changed')
+        raise ValueError('Fit, candidate or reference image changed')
     if validation_lock is not None:
         from .nativevalidate import validate_lock
         if validate_lock(project, validation_lock)[1] != candidate.get('validation_lock_sha256'):
             raise ValueError('Validation lock changed after fitting')
-    return {'candidate_sha256': candidate_sha, 'table_sha256': program.w.sha(inputs.table),
+    fit = {'candidate_sha256': candidate_sha, 'table_sha256': program.w.sha(table),
             'provenance': candidate['provenance'], 'fitting': candidate['fitting'],
             'synthetic_holdout': candidate['synthetic_holdout'], 'acceptance': candidate['acceptance'],
             'image_comparison': evaluation, 'actual_camera_accuracy_verified': False}
+    return fit, raw, table, candidate
+
+
+def _fit_binding(root, project, photo, inputs, evaluation, validation_lock):
+    fit, raw, table, _ = _reference_binding(root, project, photo, evaluation, validation_lock)
+    if raw != inputs.candidate or table != inputs.table:
+        raise ValueError('Reference and frozen bundle candidate differ')
+    return fit
+
+
+def preview(directory, *, project, photo, st_input, assume_srgb=False, masks=None, validation_lock=None):
+    """Reference comparison only; failed limits still produce useful diagnostics.
+
+    No program policy, archive, settings, resources, worker or bundle is used.
+    build's existing threshold/source gates remain independent and mandatory.
+    """
+    if st_input is not True: raise ValueError('Explicit ST input declaration required')
+    from . import nativefit as nf
+    root = _new_root(directory)
+    nf.fit(project, root / 'candidate', validation_lock=validation_lock)
+    evaluation = nf.evaluate_photo(project, root / 'candidate/candidate.json', photo, root / 'evaluation',
+                                   st_input=True, assume_srgb=assume_srgb, masks_path=masks)
+    fit, _, _, candidate = _reference_binding(root, project, photo, evaluation, validation_lock)
+    thresholds = candidate['acceptance']['thresholds_declared_before_holdout']
+    failed = []
+    for stage, metrics in (('fit_holdout', fit['synthetic_holdout']), ('image', evaluation['overall'])):
+        for metric, limit in (('rgb_mae', 'max_rgb_mae'), ('delta_e76_p95', 'max_delta_e76_p95')):
+            if metrics[metric] > thresholds[limit]: failed.append({'stage': stage, 'metric': metric, 'actual': metrics[metric], 'limit': thresholds[limit]})
+    result = {**program.w.boundary(), 'schema': 'a7c2-offline-preview-result/1', 'private_report': True,
+              'phase': 'OFFLINE_PREVIEW_LIMITS_EXCEEDED' if failed else 'OFFLINE_PREVIEW_CHECKED',
+              'material_kind': 'explicit-project-and-image-unverified-origin', 'fit': fit,
+              'offline_thresholds_passed': not failed, 'failed_criteria': failed,
+              'gray_ramp_reference_error': candidate['gray_ramp_reference_error'],
+              'gray_ramp_neutrality': candidate['gray_ramp_neutrality'],
+              'fit_domain_clipping': candidate['domain_clipping'],
+              'device_operations_enabled': False, 'camera_deployment_enabled': False,
+              'program_policy_or_bundle_used': False, 'same_capture_provenance_verified': False,
+              'actual_camera_accuracy_verified': False, 'restore_verified': False,
+              'model_is_provisional': True, 'input_ST_identity_independently_verified': False}
+    score = evaluation['overall']; fitting = fit['fitting']
+    status = '本项目事先声明的整体离线阈值通过' if not failed else '离线阈值超限；仅保留诊断，不作通过结论'
+    stage_names = {'fit_holdout': '拟合留出', 'image': '本图'}
+    metric_names = {'rgb_mae': '平均RGB误差', 'delta_e76_p95': '色差P95'}
+    reasons = '\n'.join(f"- {stage_names[r['stage']]} / {metric_names[r['metric']]}：{r['actual']:.8g}，上限 {r['limit']:.8g}" for r in failed) or '无整体超限项。'
+    region_names = dict(zip(nf.REGIONS, ('肤色', '灰阶', '绿色', '天空', '高光', '阴影', '饱和色')))
+    regions = '\n'.join('| ' + region_names[n] + ' | ' +
+                        (f"{v['rgb_mae']:.8g} | {v['delta_e76_p95']:.8g}" if v['available'] else '缺少有效显式掩码 | 不作评价') + ' |'
+                        for n, v in evaluation['regions'].items())
+    text = f'''# 电脑端原生拟合预览
+
+{status}。输入项目/模型/ST身份均为显式提供的声明，未证明真实Sony ST或相机精度。
+
+![原LUT参考](evaluation/reference.png)
+![原生表模型预测](evaluation/prediction.png)
+
+本图RGB MAE：{score['rgb_mae']:.8g}；Delta E76 P95：{score['delta_e76_p95']:.8g}。灰阶坡度/中性偏差、拟合留出及各分区细项见preview.private.json。
+
+系数触限：{fitting['bounded_coefficients']}；系数范围：{fitting['coefficient_min']}..{fitting['coefficient_max']}。本图原生预测发生裁切的通道数：{evaluation['native_clipped_channels_full_image']}/{evaluation['native_clip_channel_denominator']}；参考域截断计数：{sum(evaluation['domain_clipping'].values())}。参考域计数按重复评估行累计，不是独立像素数。这些计数描述当前暂定模型，不能定位Sony ISP问题；完整域统计/分母见私人JSON。
+
+{reasons}
+
+| 显式区域 | RGB MAE | Delta E76 P95 |
+| --- | --- | --- |
+{regions}
+
+分区仅报告误差，没有自动肤色识别或分区验收结论。未提供/空掩码不是零误差。表与图片仅为机外参考，未读取程序/设置/资源，未生成私人机身包、模块或安装许可。输入域/桥接仍须有依据，普通sRGB标签不能证明Sony ST；电影Log LUT不能仅改名称使用。
+
+输出保留在新私人目录；candidate/correction.table不是固件或可直接安装文件。超限报告不能放宽build的固定来源/整体阈值门槛。原照片保持，后续相机标定、预览/JPEG/回放/冷启动及恢复另行验证。
+'''
+    program._save_report(program._output_path(root / 'preview.private.json', root / 'candidate'), result)
+    write_bytes_new(root / 'RESULT.md', text.encode())
+    return result
 
 
 def _combine(policy, inputs, review, binding, fit, *, synthetic, source_pin_checked, root):
@@ -181,16 +255,19 @@ def build(archive, directory, *, project, photo, st_input, slot, name, ap_path, 
 def main(argv=None):
     parser = b.t._Parser(description=__doc__, allow_abbrev=False)
     commands = parser.add_subparsers(dest='command', required=True, parser_class=b.t._Parser)
-    for command in ('demo', 'build'):
+    for command in ('demo', 'preview', 'build'):
         sub = commands.add_parser(command, allow_abbrev=False)
         sub.add_argument('--directory', required=True)
-        if command == 'build':
-            for option in ('archive', 'project', 'input', 'ap', 'cp', 'ram', 'saved', 'resources', 'name'):
+        if command in ('preview', 'build'):
+            for option in ('project', 'input'):
                 sub.add_argument('--' + option, required=True)
-            sub.add_argument('--slot', required=True, type=int, choices=range(1, 7))
             sub.add_argument('--st-input', required=True, action='store_true')
             sub.add_argument('--assume-srgb', action='store_true')
             sub.add_argument('--masks'); sub.add_argument('--validation-lock')
+        if command == 'build':
+            for option in ('archive', 'ap', 'cp', 'ram', 'saved', 'resources', 'name'):
+                sub.add_argument('--' + option, required=True)
+            sub.add_argument('--slot', required=True, type=int, choices=range(1, 7))
             for state in ('ram', 'saved'):
                 sub.add_argument('--' + state + '-roles', type=int, nargs=2, choices=(0, 1), required=True)
     try: args = parser.parse_args(argv)
@@ -198,15 +275,19 @@ def main(argv=None):
         print('Unified offline workflow rejected: INVALID_ARGUMENTS', file=sys.stderr); return 2
     try:
         if args.command == 'demo': result = demo(args.directory)
+        elif args.command == 'preview':
+            result = preview(args.directory, project=args.project, photo=args.input, st_input=args.st_input,
+                             assume_srgb=args.assume_srgb, masks=args.masks, validation_lock=args.validation_lock)
         else:
             result = build(args.archive, args.directory, project=args.project, photo=args.input, st_input=args.st_input,
                            slot=args.slot, name=args.name, ap_path=args.ap, cp_path=args.cp, ram_path=args.ram,
                            saved_path=args.saved, resources_path=args.resources,
                            ram_roles=dict(zip(('AP', 'CP'), args.ram_roles)), saved_roles=dict(zip(('AP', 'CP'), args.saved_roles)),
                            assume_srgb=args.assume_srgb, masks=args.masks, validation_lock=args.validation_lock)
-        raw = encoded({key: result[key] for key in ('schema', 'phase', 'synthetic_only', 'device_operations_enabled')}).decode()
+        flag = 'offline_thresholds_passed' if args.command == 'preview' else 'synthetic_only'
+        raw = encoded({key: result[key] for key in ('schema', 'phase', flag, 'device_operations_enabled')}).decode()
         if sys.stdout.write(raw) != len(raw): raise OSError('Incomplete summary output')
-        sys.stdout.flush(); return 0
+        sys.stdout.flush(); return 0 if result.get('offline_thresholds_passed', True) else 1
     except (ValueError, OSError, KeyError, TypeError, ImportError, StopIteration, struct.error, zipfile.BadZipFile) as error:
         print('Unified offline workflow rejected: ' + type(error).__name__ + '; preserve partial output', file=sys.stderr)
         return 1

@@ -80,3 +80,5 @@ USB 服务协议来自 [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-R
 第六十三轮[统一离线入口/演练](docs/OFFLINE-WORKFLOW.md)由本项目编写，复用已署名的QAQLeonard原生拟合、固定程序/名称元数据及设置语义、ma1co BK4研究和ajalt既有来源/许可；不改上游锁和vendored源码。默认暖色CUBE/图/微型程序/BK4包裹/UXC全由数学规则自制，不分发原厂材料、密钥或机内模块；演示不能进入生产策略，不构成实际SDK、机身写入/恢复或Sony ST色彩验收。
 
 第六十四轮[D4电脑端真实核验](docs/D4-HOST-READINESS.md)沿用QAQLeonard/ma1co/ajalt固定来源；另检查现装PyUSB、Chris Reed的libusb-package与libusb项目的公开版本接口及各自原许可，未复制/分发其库或头文件。只实际导入/加载并查询静态库版本，不初始化上下文、枚举或操作相机，不把该结果当真实通信/恢复验证。PRIVATE菜单副本只按用户声明归类、忽略发布，未读取内容。
+
+第六十五轮[独立机外预览/诊断](docs/COMPUTER-ONLY-PREVIEW.md)与[摄影准备工作表](docs/PHOTO-ACCEPTANCE-CHECKLIST.md)由本项目编写，继续复用QAQLeonard固定v2.1的原生拟合/编码/坐标模型和既有N2图像/误差实现，原vendored源码/许可保持；不引入新的设备代码、模拟SDK、固件资产或真实机身材料。暂定模型预览、超限报告与自制CLI演练不构成Sony ST、机内色彩或恢复验证。
