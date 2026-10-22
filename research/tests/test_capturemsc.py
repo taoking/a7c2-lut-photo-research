@@ -13,9 +13,9 @@ def model_response(serial=b'\x01\x23\xab\xcd',model=b'ILCE-7CM2',*,plist=b''):
     return struct.pack('<IHH8x',len(body),1,0)+body
 
 
-def tape(response=None):
+def tape(response=None,*,inquiry_size=36):
     response=model_response() if response is None else response
-    inquiry=bytearray(36);inquiry[4]=31;inquiry[8:16]=b'Sony    '
+    inquiry=bytearray(inquiry_size);inquiry[4]=inquiry_size-5;inquiry[8:16]=b'Sony    '
     todo=[]
     def transaction(cdb,data=b'',incoming=False,request=None):
         size=len(data) if request is None else request
@@ -24,7 +24,7 @@ def tape(response=None):
         todo.append(('read',struct.pack('<4sIIB',b'USBS',0,size-len(data) if incoming else 0,0)))
     transaction(b'\0'*6)
     transaction(b'\x12\0\0\0\x05\0',bytes(inquiry[:5]),True)
-    transaction(b'\x12\0\0\0\x24\0',bytes(inquiry),True)
+    transaction(b'\x12\0\0\0'+bytes([inquiry_size])+b'\0',bytes(inquiry),True)
     transaction(b'\x7a\x01'+b'\0'*10,struct.pack('<IHH8x',0,1,0)+bytes(8176))
     transaction(b'\x7a\x01'+b'\0'*10,response,True,8192)
     return todo
@@ -60,6 +60,54 @@ class IdentityTests(unittest.TestCase):
         q,w=self.query();q.run();count=len(w.calls)
         with self.assertRaises(RuntimeError):q.run()
         self.assertEqual(len(w.calls),count)
+
+    def test_inquiry_lengths_are_received_before_model_query(self):
+        for length in (32,36,47,255):
+            with self.subTest(length=length):
+                q,w=self.query(Wire(tape(inquiry_size=length)))
+                self.assertEqual(q.run()['model'],'ILCE-7CM2')
+                self.assertEqual(q.calls,14);self.assertFalse(w.entries)
+
+    def test_failure_at_each_raw_call_stops_without_completion_or_replay(self):
+        for at in range(1,15):
+            with self.subTest(at=at):
+                entries=tape(inquiry_size=47);wire=Wire(entries);attempts=[]
+                error=OSError('Self-made transport failure')
+                def invoke(kind,value,timeout):
+                    attempts.append(kind)
+                    if len(attempts)==at:raise error
+                    return getattr(wire,kind)(value,timeout)
+                q=m._Query(lambda raw,t:invoke('write',raw,t),
+                           lambda size,t:invoke('read',size,t),Budget(65536))
+                with self.assertRaises(OSError) as caught:q.run()
+                self.assertIs(caught.exception,error)
+                self.assertEqual(q.calls,at)
+                self.assertEqual(q.accepted_bytes,sum(len(raw) for _,raw in entries[:at-1]))
+                self.assertEqual(q.budget.used,q.accepted_bytes)
+                self.assertTrue(q.unknown)
+                self.assertEqual(wire.entries,entries[at-1:])
+                with self.assertRaises(RuntimeError):q.run()
+                self.assertEqual(len(attempts),at)
+
+    def test_model_data_failure_reproduces_13_calls_8451_accepted_bytes(self):
+        # Independent accounting: 5 CBWs, 4 CSWs, inquiry 5+47, request 8192.
+        # The failing 8192-byte IN request contributes no accepted bytes.
+        wire=Wire(tape(inquiry_size=47));attempts=[]
+        error=OSError(60,'Self-made timeout; no actual USB')
+        def read(size,timeout):
+            attempts.append(size)
+            if size==8192:raise error
+            return wire.read(size,timeout)
+        q=m._Query(wire.write,read,Budget(65536))
+        with self.assertRaises(OSError) as caught:q.run()
+        self.assertIs(caught.exception,error)
+        self.assertEqual((q.transactions,q.calls,q.accepted_bytes),(5,13,8451))
+        self.assertEqual(q.accepted_bytes,5*31+4*13+5+47+8192)
+        self.assertEqual(attempts,[13,5,13,47,13,13,8192])
+        self.assertEqual([kind for kind,_ in wire.entries],['read','read'])
+        self.assertTrue(q.unknown)
+        with self.assertRaises(RuntimeError):q.run()
+        self.assertEqual(len(attempts),7)
 
     def test_short_model_packet_with_matching_residue(self):
         q,_=self.query(Wire(tape(model_response(plist=b'own opaque data'))));self.assertEqual(q.run()['model'],'ILCE-7CM2')

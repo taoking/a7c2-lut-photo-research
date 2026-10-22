@@ -291,6 +291,19 @@ class NativeBindingTests(unittest.TestCase):
                 with self.assertRaises(ValueError):ops.command(args,1)
             self.assertEqual(run.call_count,1)
 
+    def test_larger_output_budget_is_only_for_fixed_host_registry_query(self):
+        with patch.object(m,'_bounded_command',return_value=b'') as run:
+            ops=m._NativeOps()
+            ops.command(('/usr/sbin/ioreg','-p','IOService','-l','-a'),2)
+            run.assert_called_once_with(('/usr/sbin/ioreg','-p','IOService','-l','-a'),2,limit=32*1024*1024)
+            run.reset_mock()
+            ops.command(('/usr/sbin/diskutil','info','-plist','disk9'),2)
+            run.assert_called_once_with(('/usr/sbin/diskutil','info','-plist','disk9'),2)
+            run.reset_mock()
+            with self.assertRaises(ValueError):
+                ops.command(('/usr/sbin/ioreg','-p','IOService','-l','-a','-w','0'),2)
+            run.assert_not_called()
+
     def tree(self):
         return [{'IOObjectClass':'IOUSBHostDevice','idVendor':0x054c,'idProduct':m.NORMAL,'IORegistryEntryID':100,
                  'IORegistryEntryChildren':[{'IOObjectClass':'IOMedia','BSD Name':'disk9'}]}]
@@ -347,6 +360,18 @@ class NativeBindingTests(unittest.TestCase):
         self.assertFalse(any(n=='usb' or n.startswith('usb.') for n in sys.modules))
 
 class HostCommandBoundsTests(unittest.TestCase):
+    def test_real_large_host_stdout_accepts_reviewed_size_and_still_rejects_overflow(self):
+        mib=1024*1024
+        for count,limit,accepted in ((9*mib,32*mib,True),(32*mib,32*mib,True),
+                                      (32*mib+1,32*mib,False),(8*mib+1,8*mib,False)):
+            with self.subTest(count=count,limit=limit):
+                command=(sys.executable,'-B','-c',f'import sys; sys.stdout.buffer.write(b"x"*{count})')
+                if accepted:
+                    self.assertEqual(len(m._bounded_command(command,20,limit=limit)),count)
+                else:
+                    with self.assertRaisesRegex(ValueError,'^Host command output exceeded bound$'):
+                        m._bounded_command(command,20,limit=limit)
+
     def exercise(self,chunks,*,ready=True,code=0):
         process=Mock();process.poll.return_value=None;process.wait.return_value=code;process.stdout.fileno.return_value=7
         selector=Mock();selector.__enter__=Mock(return_value=selector);selector.__exit__=Mock(return_value=False)

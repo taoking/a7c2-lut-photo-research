@@ -149,12 +149,14 @@ class World:
         if isinstance(value,BaseException):raise value
         return value
 
-    def command(self,args,seconds):
+    def command(self,args,seconds,*,limit=8*1024*1024):
         assert 0<seconds<=20;self.record('command')
         if args==('/usr/sbin/ioreg','-p','IOService','-l','-a'):
+            assert limit==m.IOREGISTRY_MAX_BYTES
             return plistlib.dumps([{'IOObjectClass':'IOUSBHostDevice','idVendor':0x054c,'idProduct':m.NORMAL,
                 'IORegistryEntryID':100,'IORegistryEntryChildren':[
                     {'IOObjectClass':'IOMedia','BSD Name':'disk9'},{'IOObjectClass':'IOMedia','BSD Name':'disk9s1'}]}])
+        assert limit==8*1024*1024
         if args[:3]==('/usr/sbin/diskutil','info','-plist'):
             name=args[3];assert name in ('disk9','disk9s1')
             value={'DeviceIdentifier':name,'Internal':False,'OSInternalMedia':False,'BusProtocol':'USB',

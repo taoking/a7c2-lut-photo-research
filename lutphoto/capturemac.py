@@ -23,6 +23,10 @@ from .capturestore import Budget
 LOCK = '/var/run/a7c2-fl23-macos.lock'  # Same exclusion domain as the old installer.
 NORMAL, SERVICE = 0x0e8a, 0x0336
 DISK = re.compile(r'disk[0-9]+(?:s[0-9]+)*\Z')
+IOREGISTRY_COMMAND = ('/usr/sbin/ioreg','-p','IOService','-l','-a')
+# A real macOS IOService snapshot exceeded 18 MiB. Keep a finite, separate
+# host-registry allowance; diskutil and all camera/protocol bounds stay fixed.
+IOREGISTRY_MAX_BYTES = 32 * 1024 * 1024
 
 
 @dataclass(frozen=True)
@@ -123,11 +127,13 @@ class _NativeOps:
     def unlock(self,fd):os.close(fd)  # No unlink/replacement and no authentication changes.
 
     def command(self,args,seconds):
-        allowed=(args==('/usr/sbin/ioreg','-p','IOService','-l','-a')
+        allowed=(args==IOREGISTRY_COMMAND
                  or len(args)==4 and args[:3]==('/usr/sbin/diskutil','info','-plist') and DISK.fullmatch(args[3])
                  or len(args)==3 and args[:2]==('/usr/sbin/diskutil','unmountDisk') and re.fullmatch(r'/dev/disk[0-9]+',args[2]))
         if not allowed:raise ValueError('Fixed non-forced host commands only')
         if type(seconds) not in (int,float) or not 0<seconds<=20:raise ValueError('Bounded command duration required')
+        if args==IOREGISTRY_COMMAND:
+            return _bounded_command(args,seconds,limit=IOREGISTRY_MAX_BYTES)
         return _bounded_command(args,seconds)
 
     def media(self,seconds):
@@ -136,7 +142,7 @@ class _NativeOps:
             remaining=end-self.clock()
             if remaining<=0:raise TimeoutError('Media query deadline expired')
             return self.command(args,min(20,remaining))
-        tree=plistlib.loads(command(('/usr/sbin/ioreg','-p','IOService','-l','-a')))
+        tree=plistlib.loads(command(IOREGISTRY_COMMAND))
         targets=[v for v in _walk(tree) if v.get('IOObjectClass')=='IOUSBHostDevice'
                  and v.get('idVendor')==0x054c and v.get('idProduct')==NORMAL]
         if len(targets)!=1 or type(targets[0].get('IORegistryEntryID')) is not int:raise ValueError('Unique registry target required')

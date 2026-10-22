@@ -17,6 +17,7 @@ from lutphoto.capturecontrol import Cancellation
 from lutphoto.capturestore import Store, Sink, encoded
 from research.tests import test_captureowned as fixtures, test_capturesignals as signal_fixtures
 from research.tests.native_sdk_fixture import World, Device
+from research.tests.test_capturemsc import tape
 
 
 class ExecutionTests(unittest.TestCase):
@@ -117,6 +118,55 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(e.exit_code(result),1);self.assertEqual(result['errors'][0]['reason_type'],'OperationCancelled')
         self.assertIsNotNone(result['checkpoint']);self.assertEqual(w.system.counts.get('control',0),0)
         self.assertEqual(w.system.counts['dispose'],1);self.assertEqual(e.inspect_directory(d,receipt=r)['material_evidence'],'UNKNOWN')
+
+    def test_model_data_usb_error_stops_before_auth_and_stays_unknown_after_disposal(self):
+        # Same call/byte shape as the real failure, entirely self-made SDK data.
+        class USBError(OSError):pass
+        result,w,d,r=self.make(initial=tape(inquiry_size=47),
+                               native_faults={('read',7):USBError(60,'Self-made USB timeout')})
+        self.assertEqual(e.exit_code(result),1)
+        self.assertEqual(result['errors'][0],{'stage':'body','reason_type':'USBError'})
+        self.assertFalse(result['material_observations_complete'])
+        checkpoint=json.loads((d/e.CHECKPOINT).read_bytes());flow=checkpoint['flow']
+        self.assertEqual((flow['identity_raw_calls'],flow['identity_bytes']),(13,8451))
+        self.assertEqual((flow['handles_opened'],flow['handles_closed']),(1,1))
+        self.assertEqual((flow['requests'],flow['authentication_raw_calls'],flow['payload_bytes']),(0,0,0))
+        self.assertEqual(flow['authentication_phase'],'NOT_STARTED')
+        self.assertFalse(flow['transition_started']);self.assertTrue(flow['outcome_unknown'])
+        self.assertEqual(checkpoint['files'],{})
+        self.assertEqual((w.counts['write'],w.counts['read']),(6,7))
+        self.assertEqual(w.counts.get('control',0),0)
+        self.assertEqual((w.counts.get('release',0),w.system.counts.get('attach',0)),(0,0))
+        self.assertEqual(w.counts.get('implicit-release',0),1)
+        self.assertEqual(w.system.counts['dispose'],1)
+        checked=e.inspect_directory(d,receipt=r)
+        self.assertEqual(checked['classification'],'NEEDS_REVIEW_UNKNOWN')
+        self.assertEqual(checked['terminal_evidence'],'MATCHED_FAILURE')
+        self.assertEqual(checked['materials_hashed'],0)
+        operations=[row['details'].get('operation') for row in self.fixture.records(d)
+                    if row['event']=='HOST_ACK']
+        self.assertNotIn('NORMAL_IDENTITY_QUERY',operations)
+        self.assertNotIn('ATTACH_KERNEL',operations)
+        self.assertEqual(operations[-1],'DISPOSE_RESOURCES')
+
+    def test_same_identity_counters_can_fail_in_descriptor_check_before_bulk_read(self):
+        # _Query counts an attempted callback before _Owner rechecks its profile.
+        # Counters alone cannot establish which SDK method raised USBError.
+        class USBError(OSError):pass
+        original=Device.get_active_configuration
+        def descriptor(device):
+            counts=device.world.counts
+            if counts.get('write',0)==6 and counts.get('read',0)==6:
+                raise USBError(5,'Self-made descriptor failure before model read')
+            return original(device)
+        with patch.object(Device,'get_active_configuration',descriptor):
+            result,w,d,r=self.make(initial=tape(inquiry_size=47))
+        flow=json.loads((d/e.CHECKPOINT).read_bytes())['flow']
+        self.assertEqual((flow['identity_raw_calls'],flow['identity_bytes']),(13,8451))
+        self.assertEqual(w.counts['read'],6)  # The seventh bulk read never starts.
+        self.assertEqual(result['errors'][0],{'stage':'body','reason_type':'USBError'})
+        self.assertEqual(w.counts.get('control',0),0)
+        self.assertEqual(e.inspect_directory(d,receipt=r)['classification'],'NEEDS_REVIEW_UNKNOWN')
 
     def test_signal_restore_failure_after_materials_changes_terminal_only(self):
         api=signal_fixtures.FakeSignals();api.faults[3]=OSError('Own restore')
