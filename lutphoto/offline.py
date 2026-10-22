@@ -12,6 +12,7 @@ import zipfile
 from . import settingsplan as settings
 from .capturestore import _parent, _private, _same, encoded
 from .io import write_bytes_new
+from .inputerrors import InputProblem, input_context, preview_hint
 
 b, program, names = settings.b, settings.program, settings.names
 
@@ -78,13 +79,17 @@ def preview(directory, *, project, photo, st_input, assume_srgb=False, masks=Non
     No program policy, archive, settings, resources, worker or bundle is used.
     build's existing threshold/source gates remain independent and mandatory.
     """
-    if st_input is not True: raise ValueError('Explicit ST input declaration required')
+    if st_input is not True: raise InputProblem('ST_DECLARATION', 'Explicit ST input declaration required')
     from . import nativefit as nf
-    root = _new_root(directory)
-    nf.fit(project, root / 'candidate', validation_lock=validation_lock)
-    evaluation = nf.evaluate_photo(project, root / 'candidate/candidate.json', photo, root / 'evaluation',
-                                   st_input=True, assume_srgb=assume_srgb, masks_path=masks)
-    fit, _, _, candidate = _reference_binding(root, project, photo, evaluation, validation_lock)
+    with input_context('OUTPUT_DIRECTORY'):
+        root = _new_root(directory)
+    with input_context('FIT'):
+        nf.fit(project, root / 'candidate', validation_lock=validation_lock)
+    with input_context('IMAGE'):
+        evaluation = nf.evaluate_photo(project, root / 'candidate/candidate.json', photo, root / 'evaluation',
+                                       st_input=True, assume_srgb=assume_srgb, masks_path=masks)
+    with input_context('SOURCE_CHANGED'):
+        fit, _, _, candidate = _reference_binding(root, project, photo, evaluation, validation_lock)
     thresholds = candidate['acceptance']['thresholds_declared_before_holdout']
     failed = []
     for stage, metrics in (('fit_holdout', fit['synthetic_holdout']), ('image', evaluation['overall'])):
@@ -272,7 +277,10 @@ def main(argv=None):
                 sub.add_argument('--' + state + '-roles', type=int, nargs=2, choices=(0, 1), required=True)
     try: args = parser.parse_args(argv)
     except b.t._Arguments:
-        print('Unified offline workflow rejected: INVALID_ARGUMENTS', file=sys.stderr); return 2
+        values = sys.argv[1:] if argv is None else argv
+        message = ('参数不完整或不受支持 [INVALID_ARGUMENTS]；使用preview --help 核对参数，必须显式提供 --st-input。'
+                   if values and values[0] == 'preview' else 'Unified offline workflow rejected: INVALID_ARGUMENTS')
+        print(message, file=sys.stderr); return 2
     try:
         if args.command == 'demo': result = demo(args.directory)
         elif args.command == 'preview':
@@ -289,7 +297,11 @@ def main(argv=None):
         if sys.stdout.write(raw) != len(raw): raise OSError('Incomplete summary output')
         sys.stdout.flush(); return 0 if result.get('offline_thresholds_passed', True) else 1
     except (ValueError, OSError, KeyError, TypeError, ImportError, StopIteration, struct.error, zipfile.BadZipFile) as error:
-        print('Unified offline workflow rejected: ' + type(error).__name__ + '; preserve partial output', file=sys.stderr)
+        if args.command == 'preview':
+            print(preview_hint(error), file=sys.stderr)
+        else:
+            kind = 'ValueError' if isinstance(error, InputProblem) else type(error).__name__
+            print('Unified offline workflow rejected: ' + kind + '; preserve partial output', file=sys.stderr)
         return 1
 
 

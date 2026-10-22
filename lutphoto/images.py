@@ -5,6 +5,7 @@ import warnings
 
 from .cube import evaluate
 from .io import write_new
+from .inputerrors import InputProblem
 
 MAX_PIXELS = 64_000_000
 MAX_IMAGE_BYTES = 128 * 1024 * 1024
@@ -46,21 +47,21 @@ def read_srgb(path, assume_srgb=False):
                 color_space = exif.get_ifd(0x8769).get(0xA001)
             declared_srgb = color_space == 1 or 'srgb' in image.info
             if not profile and color_space not in (None, 1):
-                raise ValueError('照片明确声明其他色彩空间，需有效 ICC 或先正确转换；不能用 --assume-srgb 覆盖')
+                raise InputProblem('IMAGE_SPACE', '照片明确声明其他色彩空间，需有效 ICC 或先正确转换；不能用 --assume-srgb 覆盖')
             if not profile and not declared_srgb and not assume_srgb:
-                raise ValueError('照片未声明 sRGB；确认其为 sRGB 后显式使用 --assume-srgb')
+                raise InputProblem('IMAGE_SPACE', '照片未声明 sRGB；确认其为 sRGB 后显式使用 --assume-srgb')
             image.load()
             result = ImageOps.exif_transpose(image)
             if profile:
                 if len(profile) > 4 * 1024 * 1024:
-                    raise ValueError('ICC 配置超过 4 MiB 上限')
+                    raise InputProblem('ICC', 'ICC 配置超过 4 MiB 上限')
                 try:
                     source = ImageCms.ImageCmsProfile(io.BytesIO(profile))
                     result = ImageCms.profileToProfile(
                         result, source, ImageCms.createProfile('sRGB'), outputMode='RGB',
                         renderingIntent=ImageCms.Intent.RELATIVE_COLORIMETRIC)
                 except (ImageCms.PyCMSError, OSError, ValueError) as exc:
-                    raise ValueError('ICC 色彩转换失败，未应用 LUT') from exc
+                    raise InputProblem('ICC', 'ICC 色彩转换失败，未应用 LUT') from exc
                 interpretation = 'icc-converted-to-srgb'
             else:
                 interpretation = 'declared-srgb' if declared_srgb else 'assumed-srgb'

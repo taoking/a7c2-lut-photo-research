@@ -11,6 +11,7 @@ import numpy as np
 from ._vendor.sonylooks import native
 from .cube import load_cube, evaluate
 from .io import write_bytes_new, write_new
+from .inputerrors import InputProblem, input_context
 from .native_metrics import compare
 
 SCHEMA = 'a7c2-offline-native-project/1'
@@ -77,51 +78,55 @@ def integer(value, lower, upper, label):
 
 def load_project(path):
     path = Path(path)
-    project, project_sha = read_json(path)
+    with input_context('PROJECT'):
+        project, project_sha = read_json(path)
     if project.get('schema') != SCHEMA or project.get('base') != 'ST':
-        raise ValueError('Offline project schema 1 and explicit base ST required')
-    calibration, calibration_sha = read_json(local_path(path.parent, project.get('calibration')))
-    if calibration.get('schema') != 'a7c2-look-calibration/1' or calibration.get('coordinate_model') != 'bt601-limited-provisional':
-        raise ValueError('Explicit provisional ST calibration schema required')
-    evidence = description(calibration.get('evidence'), 'calibration evidence')
-    if calibration.get('full_camera_characterization') is not False:
-        raise ValueError('This adapter supports provisional models only')
-    response = native.validate_response(calibration.get('response_matrix'))
+        raise InputProblem('PROJECT', 'Offline project schema 1 and explicit base ST required')
+    with input_context('MODEL'):
+        calibration, calibration_sha = read_json(local_path(path.parent, project.get('calibration')))
+        if calibration.get('schema') != 'a7c2-look-calibration/1' or calibration.get('coordinate_model') != 'bt601-limited-provisional':
+            raise ValueError('Explicit provisional ST calibration schema required')
+        evidence = description(calibration.get('evidence'), 'calibration evidence')
+        if calibration.get('full_camera_characterization') is not False:
+            raise ValueError('This adapter supports provisional models only')
+        response = native.validate_response(calibration.get('response_matrix'))
     source = project.get('source')
     if not isinstance(source, dict) or source.get('type') != 'cube':
-        raise ValueError('This offline adapter currently accepts CUBE only')
+        raise InputProblem('PROJECT', 'This offline adapter currently accepts CUBE only')
     attribution = description(source.get('attribution'), 'source attribution/license')
     space = description(source.get('input_space'), 'LUT input space')
     if source.get('output_space') != 'srgb':
-        raise ValueError('Reference output must explicitly be encoded sRGB')
+        raise InputProblem('PROJECT', 'Reference output must explicitly be encoded sRGB')
     policy = source.get('domain_policy')
     if policy not in ('reject', 'clip-and-report'):
-        raise ValueError('Explicit domain_policy reject or clip-and-report required')
-    cube = load_cube(local_path(path.parent, source.get('path')))
+        raise InputProblem('PROJECT', 'Explicit domain_policy reject or clip-and-report required')
+    with input_context('CUBE'):
+        cube = load_cube(local_path(path.parent, source.get('path')))
     # No hidden output clipping. Normalize HDR/Log outputs in a reviewed reference first.
     if np.any((np.asarray(cube.rows) < 0) | (np.asarray(cube.rows) > 1)):
-        raise ValueError('Reference CUBE outputs must be normalized to 0..1 sRGB')
+        raise InputProblem('LUT_OUTPUT', 'Reference CUBE outputs must be normalized to 0..1 sRGB')
     bridge = None
     bridge_meta = None
     if space == 'sony-st-srgb':
         if 'bridge' in source:
-            raise ValueError('Direct ST input must not also specify a bridge')
+            raise InputProblem('BRIDGE', 'Direct ST input must not also specify a bridge')
     else:
         contract = source.get('bridge')
         if not isinstance(contract, dict) or contract.get('input_space') != 'sony-st-srgb' or contract.get('output_space') != space:
-            raise ValueError('Non-ST LUT needs an explicit matching ST-to-input bridge')
-        bridge_evidence = description(contract.get('evidence'), 'bridge evidence')
-        bridge = load_cube(local_path(path.parent, contract.get('path')))
+            raise InputProblem('BRIDGE', 'Non-ST LUT needs an explicit matching ST-to-input bridge')
+        with input_context('BRIDGE'):
+            bridge_evidence = description(contract.get('evidence'), 'bridge evidence')
+            bridge = load_cube(local_path(path.parent, contract.get('path')))
         bridge_meta = {'sha256': bridge.sha256, 'evidence': bridge_evidence,
                        'input_space': 'sony-st-srgb', 'output_space': space}
     seed = integer(project.get('seed', 201), 0, 2**32-1, 'seed')
     count = integer(project.get('training_samples', 12000), 512, 50000, 'training_samples')
     thresholds = project.get('thresholds')
     if not isinstance(thresholds, dict) or set(thresholds) != {'max_rgb_mae', 'max_delta_e76_p95'}:
-        raise ValueError('Declare RGB MAE and Delta E76 P95 thresholds before fitting')
+        raise InputProblem('PROJECT', 'Declare RGB MAE and Delta E76 P95 thresholds before fitting')
     for key, value in thresholds.items():
         if type(value) not in (int, float) or not math.isfinite(value) or value <= 0:
-            raise ValueError('Positive finite threshold required: '+key)
+            raise InputProblem('PROJECT', 'Positive finite threshold required: '+key)
     meta = {'project_sha256': project_sha, 'calibration_sha256': calibration_sha,
             'calibration_evidence': evidence, 'coordinate_model': calibration['coordinate_model'],
             'response_matrix': response.tolist(), 'reference_sha256': cube.sha256,
@@ -140,7 +145,7 @@ class Reference:
         outside = np.any((rgb < cube.domain_min) | (rgb > cube.domain_max), axis=1)
         count = int(np.count_nonzero(outside))
         if count and self.policy == 'reject':
-            raise ValueError(f'{stage}: {count} rows outside declared CUBE domain')
+            raise InputProblem('DOMAIN', f'{stage}: {count} rows outside declared CUBE domain')
         self.clipped_rows[stage] += count
         return evaluate(cube, rgb)
 
@@ -185,7 +190,8 @@ def fit(project_path, directory, *, validation_lock=None):
     lock_sha = None
     if validation_lock is not None:
         from .nativevalidate import validate_lock
-        lock_sha = validate_lock(project_path, validation_lock)[1]
+        with input_context('VALIDATION_LOCK'):
+            lock_sha = validate_lock(project_path, validation_lock)[1]
     raw, fitting = native.fit_reference(reference, reference.response, seed=seed, count=count)
     coefficients = native.decode(raw)
     # Reconstruct the untouched upstream split exactly; no holdout affects selection.
@@ -217,8 +223,9 @@ def fit(project_path, directory, *, validation_lock=None):
                                    'Paired camera photos and independent scenes',
                                    'Camera preview/JPEG/playback consistency']}
     if validation_lock is not None:
-        if validate_lock(project_path, validation_lock)[1] != lock_sha:
-            raise ValueError('Validation lock changed while fitting')
+        with input_context('VALIDATION_LOCK'):
+            if validate_lock(project_path, validation_lock)[1] != lock_sha:
+                raise ValueError('Validation lock changed while fitting')
         result['validation_lock_sha256'] = lock_sha
     publish(directory, {'correction.table': lambda f: f.write(raw),
                         'candidate.json': lambda f: f.write(json_bytes(result))})
@@ -230,15 +237,15 @@ def load_candidate(project_path, candidate_path):
     candidate, candidate_sha = read_json(candidate_path)
     table = candidate.get('table', {})
     if candidate.get('schema') != CANDIDATE or candidate.get('adapter_version') != 1 or candidate.get('upstream_commit') != UPSTREAM or candidate.get('provenance') != provenance:
-        raise ValueError('Candidate/project/model provenance mismatch; refit explicitly')
+        raise InputProblem('SOURCE_CHANGED', 'Candidate/project/model provenance mismatch; refit explicitly')
     if table.get('file') != 'correction.table' or table.get('bytes') != native.RAW_BYTES:
-        raise ValueError('Invalid candidate table descriptor')
+        raise InputProblem('SOURCE_CHANGED', 'Invalid candidate table descriptor')
     with Path(candidate_path).with_name('correction.table').open('rb') as f:
         raw = f.read(native.RAW_BYTES+1)
     if len(raw) != native.RAW_BYTES or digest(raw) != table.get('sha256'):
-        raise ValueError('Candidate table length/hash mismatch')
+        raise InputProblem('SOURCE_CHANGED', 'Candidate table length/hash mismatch')
     if candidate.get('acceptance', {}).get('thresholds_declared_before_holdout') != thresholds:
-        raise ValueError('Threshold mismatch')
+        raise InputProblem('SOURCE_CHANGED', 'Threshold mismatch')
     return reference, native.decode(raw), seed, thresholds, candidate_sha
 
 
@@ -282,10 +289,11 @@ def evaluate_photo(project_path, candidate_path, source, directory, *, st_input=
     source_sha = file_digest(source)
     image, interpretation = read_srgb(source, assume_srgb=assume_srgb)
     if file_digest(source) != source_sha:
-        raise ValueError('Input photo changed while reading')
+        raise InputProblem('SOURCE_CHANGED', 'Input photo changed while reading')
     if image.width*image.height > MAX_EVAL_PIXELS:
         raise ValueError('Photo evaluation limit is 4 million pixels; prepare a separate reference crop')
-    masks = read_masks(masks_path, image.size)
+    with input_context('MASK'):
+        masks = read_masks(masks_path, image.size)
     pixels = np.asarray(image).reshape(-1, 3)
     expected8, predicted8 = np.empty_like(pixels), np.empty_like(pixels)
     clipped_channels = 0
