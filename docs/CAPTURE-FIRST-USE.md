@@ -58,4 +58,4 @@ sudo .venv/bin/python -S -B -m lutphoto.captureevidence inspect \
 
 SDK管理可能阻塞，Ctrl-C/SIGTERM仅合作式请求取消；未返回时继续保留所有者、作业、回执和锁，不并行启动其他工具、强杀、复位或自动重试。返回后停止新增协议，单次尝试本地释放；不凭PID或dispose补成功。`needs_review`、通信中断或任何未知均保留目录/连接现场，后续结合已确认动作人工判断，不据本页授权拔线、取电池或恢复。完整边界见[信号说明](CAPTURE-SIGNALS-OFFLINE.md)及[首次采集审阅](CAPTURE-READINESS-REVIEW.md)。
 
-`capturecandidate review`继续只是源码审阅，候选模块的旧capture拒绝不变，不能修改review JSON当执行许可。当前C1代码/离线完成，C2本人真材料仍缺；C3单槽目标/逆向事务可先离线推进，写入/worker/恢复及真实色彩继续后置。第六十八轮增加[失败步骤/错误码诊断](CAPTURE-DIAGNOSTICS.md)及回执`/2`的离线验证，检查点/CLI命令不变；不能找回旧错误码或凭已关闭句柄/画面正常放行重采。后续设备安排另见[交接](../research/HANDOFF.md)。验证命令/发布见[第五十七轮](../research/LUT链路调查记录-第五十七轮.md)，固定来源与署名见[致谢](../ACKNOWLEDGEMENTS.md)。
+`capturecandidate review`继续只是源码审阅，候选模块的旧capture拒绝不变，不能修改review JSON当执行许可。当前C1代码/离线完成，C2本人真材料仍缺；C3单槽目标/逆向事务可先离线推进，写入/worker/恢复及真实色彩继续后置。第六十八轮增加[失败步骤/错误码诊断](CAPTURE-DIAGNOSTICS.md)及回执`/2`的离线验证，检查点/CLI命令不变；不能找回旧错误码或凭已关闭句柄/画面正常放行重采。第六十九轮另完成[单次验证审阅与准备](CAPTURE-TRIAL-REVIEW.md)，仍待当前实际连接/电量/管理员条件，尚未执行新设备分支；仅新作业不解锁旧UNKNOWN。后续设备安排见[交接](../research/HANDOFF.md)。验证命令/发布见[第五十七轮](../research/LUT链路调查记录-第五十七轮.md)，固定来源与署名见[致谢](../ACKNOWLEDGEMENTS.md)。
