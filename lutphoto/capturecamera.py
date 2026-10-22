@@ -135,8 +135,14 @@ def capture(archive,directory,receipt,*,model,firmware,battery_percent,resources
             seen.add(id(cause));secondary.append(x._error_name(cause));cause=cause.__cause__
         for name in destination.close_errors if destination else ():
             if name not in secondary:secondary.append(name)
-        raise CaptureFailure(phase,failure,started=started,
-            secondary=secondary) from failure
+        error=CaptureFailure(phase,failure,started=started,secondary=secondary)
+        if result is not None and e.valid_receipt(result) and result['errors']:
+            # Delivery uncertainty must not erase a known body failure. The
+            # phase still reports delivery failure and no retry is permitted.
+            primary=result['errors'][0]['reason_type']
+            error.secondary=(error.reason_type,)+error.secondary
+            error.reason_type=primary
+        raise error from failure
     return result
 
 
@@ -179,8 +185,10 @@ def main(argv=None):
         result=_summary('REFUSED_BEFORE_DEVICE',reason=x._error_name(error))
     try:_emit(result)
     except (OSError,ValueError,TypeError,KeyboardInterrupt) as error:
+        primary=result['reason_type'] if result and result['reason_type'] else x._error_name(error)
+        secondary=((x._error_name(error),)+tuple(result['secondary_error_types'])) if result and result['reason_type'] else ()
         failure=_summary('OUTPUT_UNCONFIRMED',saved=bool(result and result['receipt_saved']),
-            started=bool(result and result['camera_session_may_have_started']),reason=x._error_name(error))
+            started=bool(result and result['camera_session_may_have_started']),reason=primary,secondary=secondary)
         try:sys.stderr.write(encoded(failure).decode());sys.stderr.flush()
         except (OSError,ValueError,TypeError,KeyboardInterrupt):pass
         return 1

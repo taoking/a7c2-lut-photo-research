@@ -157,7 +157,9 @@ def _execute(archive,directory,host,channel,policy,*,resources,firmware,battery_
     receipt={'schema':e.RECEIPT_SCHEMA,'private_report':True,'context':context,'checkpoint':info,
         'phase':('CAPTURE_COMPLETE' if execution_kind=='native' else 'EXERCISE_COMPLETE') if success else 'NEEDS_REVIEW',
         'material_observations_complete':complete,'attempted':attempted,'cleanup':cleanup,
-        'cancel_requested':host.cancel.requested,'errors':errors,'unproven':dict.fromkeys(e.UNPROVEN,False)}
+        'cancel_requested':host.cancel.requested,'errors':errors,'unproven':dict.fromkeys(e.UNPROVEN,False),
+        'identity_diagnostics':[dict(owner.identity_diagnostic,owner='normal-initial' if n==0 else 'normal-return')
+                                for n,owner in enumerate(host.owners) if owner.identity_diagnostic is not None]}
     # A bounded terminal result, not a claim that stdout/process exit is atomic.
     if not e.valid_receipt(receipt):raise RuntimeError('Invalid internal terminal receipt')
     return receipt

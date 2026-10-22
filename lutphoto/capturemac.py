@@ -19,6 +19,7 @@ from dataclasses import dataclass
 from .capturemsc import _Query
 from .capturecontrol import Cancellation, ObservationTimeout
 from .capturestore import Budget
+from . import capturediagnostics as diagnostics
 
 LOCK = '/var/run/a7c2-fl23-macos.lock'  # Same exclusion domain as the old installer.
 NORMAL, SERVICE = 0x0e8a, 0x0336
@@ -251,6 +252,7 @@ class _Owner:
         self.claimed=self.detached=self.unknown=self.transition=self.closed=False
         self.profile=None;self.queried=False
         self.identity_bytes=self.identity_calls=0;self.close_ok=False
+        self.identity_diagnostic=None
         self.close_error_types=[]
 
     def query(self):
@@ -258,19 +260,30 @@ class _Owner:
             raise RuntimeError('No fresh MSC capability')
         self.queried=True
         def io(kind,value,timeout):
-            if self.closed or self.unknown or self.host.blocked:raise RuntimeError('Stopped owner')
-            self.host.check()
-            if self.host.ops.descriptor(self.device)!=self.profile:raise ValueError('Descriptor changed')
-            self.host.check()
-            fn=self.host.ops.write if kind=='write' else self.host.ops.read
-            result=fn(self.device,self.outgoing if kind=='write' else self.incoming,value,timeout)
-            self.host.check();return result
+            boundary='OWNER_PRECHECK';returned=None
+            try:
+                if self.closed or self.unknown or self.host.blocked:raise RuntimeError('Stopped owner')
+                self.host.check()
+                boundary='DESCRIPTOR_QUERY';profile=self.host.ops.descriptor(self.device)
+                boundary='DESCRIPTOR_CHECK'
+                if profile!=self.profile:raise ValueError('Descriptor changed')
+                boundary='OWNER_PRECHECK';self.host.check()
+                fn=self.host.ops.write if kind=='write' else self.host.ops.read
+                boundary='SDK_BULK_WRITE' if kind=='write' else 'SDK_BULK_READ'
+                result=fn(self.device,self.outgoing if kind=='write' else self.incoming,value,timeout)
+                boundary='OWNER_POSTCHECK';returned=diagnostics.returned_size(kind,result)
+                self.host.check();return result
+            except BaseException as error:
+                query.note_failure(error,boundary,returned)
+                raise
         query=_Query(lambda value,timeout:io('write',value,timeout),lambda size,timeout:io('read',size,timeout),self.host.budget)
         try:return self.host.step('NORMAL_IDENTITY_QUERY',query.run)
         except BaseException:
             self.unknown=True;raise
         finally:
             self.identity_bytes=query.accepted_bytes;self.identity_calls=query.calls
+            if query.failure_attempted:
+                self.identity_diagnostic={'failure':query.failure,'record_error_type':query.failure_record_error_type}
 
     def close(self):
         if self.closed:return

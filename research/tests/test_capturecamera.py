@@ -183,6 +183,34 @@ class CameraTests(unittest.TestCase):
         self.assertIn('TimeoutError',value['secondary_error_types'])
         self.assertEqual(args['receipt'].read_bytes(),b'{');self.assertEqual(world.system.counts['dispose'],3)
 
+    def test_diagnostic_receipt_delivery_failure_preserves_original_usb_error(self):
+        class USBError(OSError):pass
+        args=self.args();world=World(self.fixture.system(),faults={('read',7):USBError(60,'private original')})
+        def failed_save(destination,value):
+            self.assertEqual(value['identity_diagnostics'][0]['failure']['boundary'],'SDK_BULK_READ')
+            os.write(destination.fd,b'{');raise OSError('private receipt failure')
+        with patch.object(c._Receipt,'save',autospec=True,side_effect=failed_save) as save:code,output=self.run_cli(world,args)
+        value=json.loads(output.getvalue())
+        self.assertEqual(code,1);self.assertEqual(value['phase'],'CAPTURE_OR_DELIVERY_UNCONFIRMED')
+        self.assertEqual(value['reason_type'],'USBError');self.assertIn('OSError',value['secondary_error_types'])
+        self.assertFalse(value['receipt_saved']);self.assertEqual(save.call_count,1)
+        self.assertEqual(world.counts.get('control',0),0);self.assertEqual(world.counts['read'],7)
+        self.assertNotIn('private original',output.getvalue());self.assertNotIn('private receipt failure',output.getvalue())
+        self.assertEqual(args['receipt'].read_bytes(),b'{')
+
+    def test_stdout_failure_after_usb_error_keeps_original_in_stderr(self):
+        class USBError(OSError):pass
+        class Partial(io.StringIO):
+            def write(self,raw):return 0
+        args=self.args();world=World(self.fixture.system(),faults={('read',7):USBError(60,'private original')})
+        error=io.StringIO()
+        with contextlib.redirect_stderr(error):code,_=self.run_cli(world,args,output=Partial())
+        value=json.loads(error.getvalue())
+        self.assertEqual(code,1);self.assertEqual(value['phase'],'OUTPUT_UNCONFIRMED')
+        self.assertEqual(value['reason_type'],'USBError');self.assertIn('OSError',value['secondary_error_types'])
+        self.assertEqual(e._read_receipt(args['receipt'])['identity_diagnostics'][0]['failure']['errno'],60)
+        self.assertEqual(world.counts.get('control',0),0);self.assertNotIn('private original',error.getvalue())
+
     def test_stdout_partial_write_after_capture_returns_one_and_preserves_receipt(self):
         class Partial(io.StringIO):
             def write(self,raw):super().write(raw[:7]);return 7

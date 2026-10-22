@@ -12,6 +12,7 @@ import zipfile
 
 from . import captureauth as a, customcontracts as c, workercontracts as w
 from .capturestore import Budget
+from . import capturediagnostics as diagnostics
 
 CBW = struct.Struct('<4sIIBBB16s')
 CSW = struct.Struct('<4sIIB')
@@ -78,17 +79,29 @@ class _Query:
         if type(budget) is not Budget:raise TypeError('Shared host Budget required')
         self._write,self._read,self.budget=write,read,budget
         self.unknown=self.blocked=False;self.transactions=self.calls=self.accepted_bytes=0
+        self.context=None;self.failure=None;self.failure_attempted=False;self.failure_record_error_type=None
 
-    def _io(self,kind,value,*,minimum=None):
+    def note_failure(self,error,boundary,returned_bytes=None):
+        if self.failure_attempted:return
+        self.failure_attempted=True  # Never retry diagnostic recording or replace the first failure.
+        try:self.failure=diagnostics.make_failure(self.context,boundary,error,self.accepted_bytes,returned_bytes)
+        except BaseException as recording:self.failure_record_error_type=diagnostics.error_name(recording)
+
+    def _io(self,kind,value,*,part,minimum=None):
         if self.unknown or self.blocked:raise RuntimeError('Stopped MSC identity query')
+        maximum=len(value) if kind=='write' else value
+        self.context={'transaction':self.transactions,'part':part,'direction':kind,'requested_bytes':maximum,
+                      'call_number':self.calls+1,'callback_attempted':False}
+        boundary='QUERY_PRECHECK';returned=None
         try:
             self.budget.check()
-            maximum=len(value) if kind=='write' else value
             if self.budget.used+maximum>self.budget.limit:raise ValueError('Identity transfer budget exceeded')
             timeout=min(5000,int((self.budget.deadline-self.budget.clock())*1000))
             if timeout<=0:raise TimeoutError('Identity deadline expired')
             self.calls+=1
+            self.context['callback_attempted']=True;boundary='CALLBACK'
             result=self._write(value,timeout) if kind=='write' else self._read(value,timeout)
+            boundary='RESULT_VALIDATION';returned=diagnostics.returned_size(kind,result)
             if kind=='write':
                 if type(result) is not int or result!=maximum:raise ValueError('Incomplete MSC send')
                 size=maximum
@@ -97,10 +110,11 @@ class _Query:
                 size=len(result)
                 if not (maximum if minimum is None else minimum)<=size<=maximum:raise ValueError('MSC response length differs')
                 result=result if type(result) is bytes else result.tobytes()
-            self.budget.accept(size);self.accepted_bytes+=size
+            boundary='ACCOUNTING';self.budget.accept(size);self.accepted_bytes+=size
             return result
-        except BaseException:
+        except BaseException as error:
             self.unknown=True
+            self.note_failure(error,boundary,returned)
             raise
 
     def _transaction(self,command,*,out=None,size=0,minimum=None):
@@ -114,11 +128,11 @@ class _Query:
         if self.transactions>=5:raise RuntimeError('Identity query cannot be replayed')
         self.transactions+=1
         amount=len(out) if out is not None else size
-        self._io('write',CBW.pack(b'USBC',0,amount,0 if out is not None or not size else 0x80,0,len(command),command))
+        self._io('write',CBW.pack(b'USBC',0,amount,0 if out is not None or not size else 0x80,0,len(command),command),part='CBW')
         data=b''
-        if out is not None:self._io('write',out)
-        elif size:data=self._io('read',size,minimum=minimum)
-        raw=self._io('read',CSW.size)
+        if out is not None:self._io('write',out,part='DATA')
+        elif size:data=self._io('read',size,part='DATA',minimum=minimum)
+        raw=self._io('read',CSW.size,part='CSW')
         signature,tag,residue,status=CSW.unpack(raw)
         if signature!=b'USBS' or tag!=0 or residue!=(size-len(data) if out is None else 0) or status not in (0,1,2):
             self.unknown=True;raise ValueError('Unreviewed MSC completion wrapper')

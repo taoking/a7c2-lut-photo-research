@@ -18,6 +18,7 @@ from lutphoto.capturestore import Store, Sink, encoded
 from research.tests import test_captureowned as fixtures, test_capturesignals as signal_fixtures
 from research.tests.native_sdk_fixture import World, Device
 from research.tests.test_capturemsc import tape
+from lutphoto import capturediagnostics as diagnostics
 
 
 class ExecutionTests(unittest.TestCase):
@@ -126,6 +127,10 @@ class ExecutionTests(unittest.TestCase):
                                native_faults={('read',7):USBError(60,'Self-made USB timeout')})
         self.assertEqual(e.exit_code(result),1)
         self.assertEqual(result['errors'][0],{'stage':'body','reason_type':'USBError'})
+        diagnostic=result['identity_diagnostics'][0]
+        self.assertEqual(diagnostic['owner'],'normal-initial')
+        self.assertEqual(diagnostic['failure']['boundary'],'SDK_BULK_READ')
+        self.assertEqual(diagnostic['failure']['errno'],60)
         self.assertFalse(result['material_observations_complete'])
         checkpoint=json.loads((d/e.CHECKPOINT).read_bytes());flow=checkpoint['flow']
         self.assertEqual((flow['identity_raw_calls'],flow['identity_bytes']),(13,8451))
@@ -143,6 +148,7 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(checked['classification'],'NEEDS_REVIEW_UNKNOWN')
         self.assertEqual(checked['terminal_evidence'],'MATCHED_FAILURE')
         self.assertEqual(checked['materials_hashed'],0)
+        self.assertEqual(checked['identity_diagnostics'],result['identity_diagnostics'])
         operations=[row['details'].get('operation') for row in self.fixture.records(d)
                     if row['event']=='HOST_ACK']
         self.assertNotIn('NORMAL_IDENTITY_QUERY',operations)
@@ -165,8 +171,83 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual((flow['identity_raw_calls'],flow['identity_bytes']),(13,8451))
         self.assertEqual(w.counts['read'],6)  # The seventh bulk read never starts.
         self.assertEqual(result['errors'][0],{'stage':'body','reason_type':'USBError'})
+        self.assertEqual(result['identity_diagnostics'][0]['failure']['boundary'],'DESCRIPTOR_QUERY')
+        self.assertEqual(result['identity_diagnostics'][0]['failure']['errno'],5)
         self.assertEqual(w.counts.get('control',0),0)
         self.assertEqual(e.inspect_directory(d,receipt=r)['classification'],'NEEDS_REVIEW_UNKNOWN')
+
+    def test_diagnostic_recording_failure_keeps_primary_and_failure_receipt(self):
+        class USBError(OSError):pass
+        with patch.object(diagnostics,'make_failure',side_effect=RuntimeError('private metadata fault')) as recorder:
+            result,w,d,r=self.make(initial=tape(inquiry_size=47),
+                                   native_faults={('read',7):USBError(60,'private transport')})
+        self.assertEqual(recorder.call_count,1)
+        self.assertEqual(result['errors'][0],{'stage':'body','reason_type':'USBError'})
+        self.assertEqual(result['identity_diagnostics'],[{'owner':'normal-initial','failure':None,'record_error_type':'RuntimeError'}])
+        checked=e.inspect_directory(d,receipt=r)
+        self.assertEqual(checked['classification'],'NEEDS_REVIEW_UNKNOWN')
+        self.assertEqual(checked['identity_diagnostics'],result['identity_diagnostics'])
+        self.assertEqual(w.counts.get('control',0),0);self.assertEqual(w.counts['read'],7)
+
+    def test_return_query_failure_diagnostic_is_bound_to_second_query(self):
+        class USBError(OSError):pass
+        original=Device.read
+        def read(device,endpoint,size,*,timeout):
+            if device.phase==2 and size==8192:raise USBError(60,'private return query')
+            return original(device,endpoint,size,timeout=timeout)
+        with patch.object(Device,'read',read):
+            result,_,d,r=self.make(initial=tape(inquiry_size=47),returned=tape(inquiry_size=47))
+        self.assertEqual(result['identity_diagnostics'][0]['owner'],'normal-return')
+        checked=e.inspect_directory(d,receipt=r)
+        self.assertEqual(checked['classification'],'NEEDS_REVIEW_UNKNOWN')
+        self.assertEqual(checked['identity_diagnostics'][0]['failure']['call_number'],13)
+
+    def test_legacy_receipt_is_read_without_inventing_or_upgrading_diagnostics(self):
+        initial=tape();initial[1]=('read',TimeoutError('own'))
+        for name,options,want in (('old-complete',{},'CONSISTENT_EXERCISE_RECORDS'),
+                                  ('old-unknown',{'initial':initial},'NEEDS_REVIEW_UNKNOWN')):
+            result,_,d,r=self.make(name,**options)
+            legacy=copy.deepcopy(result);legacy['schema']=e.LEGACY_RECEIPT_SCHEMA;del legacy['identity_diagnostics']
+            r.write_bytes(encoded(legacy));before=r.read_bytes()
+            self.assertTrue(e.valid_receipt(legacy))
+            checked=e.inspect_directory(d,receipt=r)
+            self.assertEqual(checked['classification'],want);self.assertIsNone(checked['identity_diagnostics'])
+            self.assertEqual(r.read_bytes(),before)
+            self.assertFalse(e.valid_receipt(legacy|{'identity_diagnostics':[]}))
+            del result['identity_diagnostics'];self.assertFalse(e.valid_receipt(result))
+
+    def test_diagnostic_cannot_upgrade_success_or_disagree_with_flow(self):
+        result,_,_,_=self.make('complete')
+        initial=tape();initial[1]=('read',TimeoutError('own'))
+        failure,_,d,r=self.make('failure',initial=initial)
+        self.assertFalse(e.valid_receipt(result|{'identity_diagnostics':failure['identity_diagnostics']}))
+        for key,raw in (('owner','normal-return'),('accepted_bytes',31+1)):
+            changed=copy.deepcopy(failure)
+            record=changed['identity_diagnostics'][0]
+            if key=='owner':record[key]=raw
+            else:record['failure'][key]=raw
+            self.assertTrue(e.valid_receipt(changed));r.write_bytes(encoded(changed))
+            checked=e.inspect_directory(d,receipt=r)
+            self.assertEqual(checked['classification'],'EVIDENCE_INCONSISTENT')
+            self.assertIsNone(checked['identity_diagnostics'])
+
+    def test_missing_checkpoint_leaves_diagnostic_unbound_without_invented_contradiction(self):
+        class USBError(OSError):pass
+        put=Store.put
+        def fail(store,name,*args,**kw):
+            if name==e.CHECKPOINT:raise OSError('private checkpoint persistence')
+            return put(store,name,*args,**kw)
+        with patch.object(Store,'put',fail):
+            result,w,d,r=self.make(native_faults={('read',7):USBError(60,'private transport')})
+        self.assertIsNone(result['checkpoint'])
+        self.assertEqual(result['errors'][0],{'stage':'body','reason_type':'USBError'})
+        self.assertEqual(result['identity_diagnostics'][0]['failure']['errno'],60)
+        checked=e.inspect_directory(d,receipt=r)
+        self.assertEqual(checked['classification'],'NEEDS_REVIEW_UNKNOWN')
+        self.assertEqual(checked['terminal_evidence'],'MATCHED_FAILURE')
+        self.assertIn('IDENTITY_DIAGNOSTIC_UNBOUND',checked['issues'])
+        self.assertIsNone(checked['identity_diagnostics'])
+        self.assertEqual(w.counts.get('control',0),0);self.assertEqual(w.counts['read'],7)
 
     def test_signal_restore_failure_after_materials_changes_terminal_only(self):
         api=signal_fixtures.FakeSignals();api.faults[3]=OSError('Own restore')
