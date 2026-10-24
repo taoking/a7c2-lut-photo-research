@@ -129,7 +129,7 @@ class SessionTests(unittest.TestCase):
 
     def test_initial_missing_or_different_identity_source_and_port_rejected(self):
         cases = ({'serial_source': 'usb-descriptor'}, {'serial_sha256': ''}, {'ports': []},
-                 {'ports': [True]}, {'bus': 0}, {'model': 'ILCE-7CR'}, {'manufacturer': 'Other'})
+                 {'ports': [True]}, {'bus': -1}, {'model': 'ILCE-7CR'}, {'manufacturer': 'Other'})
         for i, update in enumerate(cases):
             initial = s.SyntheticPeer(self.files).initial | update
             report, peer, _ = self.run_case(str(i), initial=initial)

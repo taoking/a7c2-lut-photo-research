@@ -89,7 +89,7 @@ def rejected_key_fields(pid,bus,ports,address):
     """Only names of invalid cached fields; never re-read SDK properties."""
     return [name for name,valid in zip(KEY_FIELDS,(
         type(pid) is int and pid in (0x0e8a,0x0336),
-        type(bus) is int and bus>0,
+        type(bus) is int and 0<=bus<=255,
         type(ports) is tuple and 1<=len(ports)<=16 and all(type(p) is int and 1<=p<=255 for p in ports),
         type(address) is int and 1<=address<=127)) if not valid]
 

@@ -26,7 +26,7 @@ class _Identity:
 
 
 def _location(value):
-    if (type(value.get('bus')) is not int or not 1 <= value['bus'] <= 255
+    if (type(value.get('bus')) is not int or not 0 <= value['bus'] <= 255
             or type(value.get('ports')) is not list or not 1 <= len(value['ports']) <= 8
             or any(type(n) is not int or not 1 <= n <= 255 for n in value['ports'])):
         raise ValueError('Explicit bus and physical port observation required')

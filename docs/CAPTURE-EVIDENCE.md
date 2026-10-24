@@ -4,7 +4,9 @@
 
 10月24日[第六十九轮新尝试](../research/LUT链路调查记录-第六十九轮.md)在INVENTORY意图后无ACK，ValueError/6事件/0材料，身份与认证尚未开始；回执`/2`由管理员上下文自动文件检查得NEEDS_REVIEW_UNKNOWN/MATCHED_FAILURE，identity_diagnostics为空。原采集/检查退出1，摘要导出0不代表成功；旧第六十七轮记录不改，下一步先离线补枚举定位。
 
-随后[第七十一轮新作业](../research/LUT链路调查记录-第七十一轮.md)的回执/3由自动文件检查得到host_diagnostics:KEY_VALIDATE/BUS，仍NEEDS_REVIEW_UNKNOWN/MATCHED_FAILURE、6事件/0材料、0身份/认证。该次新增定位有效绑定，原始总线值未保存，不能补写旧第六十七/六十九轮原因，也不提高材料、物理协议、原生执行或恢复未证标志。当前停止设备命令，先离线核对字段来源与取值域。
+随后[第七十一轮新作业](../research/LUT链路调查记录-第七十一轮.md)的回执/3由自动文件检查得到host_diagnostics:KEY_VALIDATE/BUS，仍NEEDS_REVIEW_UNKNOWN/MATCHED_FAILURE、6事件/0材料、0身份/认证。该次新增定位有效绑定，原始总线值未保存，不能补写旧第六十七/六十九轮原因，也不提高材料、物理协议、原生执行或恢复未证标志。该轮停止设备命令，转入离线核对字段来源与取值域。
+
+第七十二轮按[固定Darwin库定义](CAPTURE-BUS-COMPATIBILITY.md)纠正位置/认证/观察及缓存字段检查的bus有效域为精确整数0–255，保留原始0并严格比较总线/端口。旧BUS失败回执仍按历史事实读取，保持UNKNOWN而不升级；schema仍/3，旧/1与/2兼容不变。本轮只有离线回归/新单次准备，本人选择稍后采集。
 
 ## 两份记录的边界
 

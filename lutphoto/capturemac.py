@@ -39,7 +39,7 @@ class _Key:
 
     def __post_init__(self):
         if (type(self.pid) is not int or self.pid not in (NORMAL,SERVICE)
-                or type(self.bus) is not int or self.bus<=0
+                or type(self.bus) is not int or not 0<=self.bus<=255
                 or type(self.ports) is not tuple or not 1<=len(self.ports)<=16
                 or any(type(p) is not int or not 1<=p<=255 for p in self.ports)
                 or type(self.address) is not int or not 1<=self.address<=127):

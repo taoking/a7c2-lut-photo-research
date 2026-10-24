@@ -38,7 +38,7 @@ class InventoryTests(unittest.TestCase):
         first,w,a,r=self.make('find',native_faults={('find',1):ValueError('private inventory')})
         self.assert_initial_failure(first,w,a,r,'SDK_FIND_NORMAL')
         init=Device.__init__
-        def bad(device,*args):init(device,*args);device.bus=0
+        def bad(device,*args):init(device,*args);device.bus=-1
         with patch.object(Device,'__init__',bad):second,w,b,r=self.make('bus')
         self.assert_initial_failure(second,w,b,r,'KEY_VALIDATE')
         self.assertEqual(second['host_diagnostics'][0]['failure']['invalid_key_fields'],['BUS'])
@@ -72,7 +72,7 @@ class InventoryTests(unittest.TestCase):
     def test_each_key_field_is_read_once_and_only_invalid_names_are_recorded(self):
         init=Device.__init__;get=Device.__getattribute__;reads={}
         def bad(device,*args):
-            init(device,*args);device.idProduct=True;device.bus=0;device.port_numbers=();device.address=128
+            init(device,*args);device.idProduct=True;device.bus=-1;device.port_numbers=();device.address=128
         def observed(device,name):
             if name in ('idVendor','idProduct','bus','port_numbers','address'):reads[name]=reads.get(name,0)+1
             return get(device,name)
@@ -150,7 +150,7 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(result['host_diagnostics'],[{'inventory_call':1,'failure':None,'record_error_type':'RuntimeError'}])
         self.assertEqual(e.inspect_directory(path,receipt=r)['classification'],'NEEDS_REVIEW_UNKNOWN')
         init=Device.__init__
-        def bad(device,*args):init(device,*args);device.bus=0
+        def bad(device,*args):init(device,*args);device.bus=-1
         with patch.object(Device,'__init__',bad),patch.object(d,'rejected_key_fields',side_effect=OSError('private fields')):
             result,_,path,r=self.make('fields')
         self.assertEqual(result['errors'][0]['reason_type'],'ValueError')

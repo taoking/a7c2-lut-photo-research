@@ -103,7 +103,7 @@ def exit_code(receipt):
 def _observation(value):
     return (type(value) is dict and set(value)=={'model','serial_source','serial_sha256','pid','bus','ports'}
         and value['model']=='ILCE-7CM2' and value['serial_source']=='sony-get-camera-info' and _hex(value['serial_sha256'])
-        and type(value['pid']) is int and value['pid']==0x0e8a and type(value['bus']) is int and 1<=value['bus']<=255
+        and type(value['pid']) is int and value['pid']==0x0e8a and type(value['bus']) is int and 0<=value['bus']<=255
         and type(value['ports']) is list and 1<=len(value['ports'])<=8
         and all(type(n) is int and 1<=n<=255 for n in value['ports']))
 
