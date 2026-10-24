@@ -1,6 +1,6 @@
 # 第七十一轮：回执/3的新单次只读尝试审阅与准备
 
-2026-10-24。延续第七十轮，先在相机断开时审阅原完整读取入口、有限枚举/身份诊断与旧失败边界，准备全新一次性命令和输出，不枚举或操作真实USB。本轮准备完成后，本人明确确认“已连接MSC，仍为官方原厂2.01”；实际电量与管理员认证仍须终端现场取得，尚未执行新设备分支。授权仍仅采集/检查，不更新或修改相机。
+2026-10-24。延续第七十轮，先在相机断开时审阅原完整读取入口、有限枚举/身份诊断与旧失败边界，准备全新一次性命令和输出，不枚举或操作真实USB。本轮准备完成后，本人明确确认“已连接MSC，仍为官方原厂2.01”；实际电量与管理员认证仍须终端现场取得，准备时未执行设备分支；随后实际失败结果见文末。授权仍仅采集/检查，不更新或修改相机。
 
 ## 有限交付
 
@@ -37,3 +37,21 @@ git diff --check
 开始前在忽略目录custom-round71保存8份既有改动快照，README/DELIVERY/plan的原分析及5份未跟踪报告均保留、不纳入本轮。plan原上游调查段包含勾选和正文更新，发布视图按快照逐块精确撤回已有差异，工作文件不回退。公开仅本轮脱敏审阅/状态文档，所有本地脚本/测试/位置/日志不发布；提交推送另核对，仅lut-photo/main。
 
 最终`.venv/bin/python -B -`文档/公开范围检查退出0：9份脱敏文档、175个本地链接目标、格式/围栏/个人路径通过；已有增补/更新逐块精确排除，5份未跟踪报告摘要不变，四份本地准备文件摘要仍匹配，真实结果日志不存在。`git diff --check`退出0；`git diff --exit-code -- lutphoto macfl23 research/tests tests upstream.lock.json requirements.txt a7c2-mac setup.sh`退出0，研究固定锁逐份无变化。本人连接事实已到，仍等待其终端实际启动，不将准备或连接确认写成采集通过。
+
+## 实际执行结果：KEY_VALIDATE/BUS拒绝
+
+本人在终端执行本轮新命令后报告已结束。原CLI NEEDS_REVIEW/ValueError/receipt_saved:true，CAPTURE_CLI_EXIT_CODE=1；管理员上下文自动文件检查为NEEDS_REVIEW_UNKNOWN/MATCHED_FAILURE、OFFLINE_INSPECTION_EXIT_CODE=1；EXISTING_RECORD_EXPORT_EXIT_CODE=0且export_complete:true，只表示摘要成功。6事件仍为CAPTURE_CONTEXT、CAPTURE_LOCKS_HELD、OWNER_FLOW_BOUND、INTENT normal-before、HOST_INTENT INVENTORY、NEEDS_REVIEW，没有INVENTORY ACK或后续接口/身份/认证事件。
+
+首次取得新增宿主诊断：inventory_call:1，failure为KEY_VALIDATE、invalid_key_fields:[BUS]、ValueError，errno/backend_error_code均null，record_error_type:null；identity_diagnostics为空。检查点C0/blocked/outcome_unknown，所有流量/身份/认证/材料和已打开/关闭句柄计数为0，认证NOT_STARTED、transition_started:false；收尾owners:NOT_ACQUIRED，job_store/global_lease/signal_handlers:CONFIRMED。枚举内部SDK对象不计入跟踪句柄，不能把0句柄解释为整个尝试没有接触USB。
+
+本次可证明缓存总线字段未满足原精确整数且大于0的条件；原始bus值未保存，不能断言为0/None/负数或认定机身/线材故障。PID/PORTS/ADDRESS没有被记录为拒绝字段。第六十九轮没有该诊断，第六十七轮失败点不同，不据本次回填两次旧原因。所有原UNKNOWN、0材料和写入/恢复未证边界保留。
+
+结果核对只读取本人所有的0600单链接普通日志，长度/元数据前后一致；原日志摘要、两报告/三退出码、6事件/零计数和新诊断一致，`.venv/bin/python -B -`内联核对退出0。另存本地0600 completion-review-20261024.private.json，不修改原日志/回执/冻结脚本/准备索引；准备时device_attempt_executed:false不再表示最新结果。没有重新采集、认证、卸载/打开接口、清端点/sense、复位或写入，也没有重开管理员原作业/PRIVATE/移动盘。
+
+本人报告画面正常，但起初只认识充电灯。核对[官方说明书第42页侧面图](https://helpguide.sony.net/ilc/2360/v1/zh-cn/print.pdf#page=42)，2号充电灯与7号存取灯分开；本人随后明确确认7号灯已熄灭。已按[官方USB断开说明](https://helpguide.sony.net/ilc/2360/v1/zh-cn/contents/0903_disconnect_pc.html)提示普通推出/拔线、受阻不强制。尚未收到实际断开确认，10月25日当前连接不猜测，不补填拍摄/冷启动/恢复通过。
+
+只读本地安装的PyUSB 1.3.1源码，Device.bus来自后端描述符；libusb后端将libusb_get_bus_number的uint8_t结果写入描述符。此为静态来源核对，没有导入/调用USB SDK，也未采集原始bus。下一轮先审计固定libusb/Darwin总线编号语义及全部位置/证据校验点，再决定兼容修正；不以未知数值为理由放宽原检查，也不直接再试相机。
+
+D4仍无完整材料/退出正例，本次新增定位不等于修复。所有第六十七/六十九/七十一轮命令已使用，禁止再运行；下一步仅电脑端工作。
+
+10月25日结果文档检查：`.venv/bin/python -B -`核对10份脱敏文档、184个本地链接及格式/围栏/个人路径通过；已有分析逐块排除、5份未跟踪报告及原日志/四份准备文件摘要不变。`git diff --check`退出0；`git diff --exit-code -- lutphoto macfl23 research/tests tests upstream.lock.json requirements.txt a7c2-mac setup.sh`退出0。本段仅收尾结果文档，没有新增代码或设备操作，不重复运行无关离线回归。
