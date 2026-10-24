@@ -166,12 +166,16 @@ class _NativeOps:
     def unmount(self,disk,seconds):return self.command(('/usr/sbin/diskutil','unmountDisk','/dev/'+disk),seconds)
 
     def _devices(self):
+        self._inventory_boundary='NATIVE_RUNTIME'
         core,util=self._runtime();devices=[]
         try:
             for pid in (NORMAL,SERVICE):
+                self._inventory_boundary='SDK_FIND_NORMAL' if pid==NORMAL else 'SDK_FIND_SERVICE'
                 for device in core.find(find_all=True,idVendor=0x054c,idProduct=pid,backend=getattr(self,'_backend',None)):
                     devices.append(device)
-                    if len(devices)>16:raise ValueError('USB inventory bound exceeded')
+                    if len(devices)>16:
+                        self._inventory_boundary='INVENTORY_LIMIT'
+                        raise ValueError('USB inventory bound exceeded')
             return devices,util
         except BaseException:
             self._dispose_all(util,devices,suppress=True)
@@ -192,16 +196,29 @@ class _NativeOps:
                 if error is None:error=exc
         if error is not None and not suppress:raise error
 
-    @staticmethod
-    def key(device):
-        if device.idVendor!=0x054c:raise ValueError('Sony identity required')
-        return _Key(device.idProduct,device.bus,tuple(device.port_numbers or ()),device.address)
+    def key(self,device):
+        self._inventory_boundary='KEY_VENDOR_READ'
+        vendor=device.idVendor
+        self._inventory_boundary='KEY_VENDOR_CHECK'
+        if vendor!=0x054c:raise ValueError('Sony identity required')
+        self._inventory_boundary='KEY_PID_READ';pid=device.idProduct
+        self._inventory_boundary='KEY_BUS_READ';bus=device.bus
+        self._inventory_boundary='KEY_PORTS_READ';ports=tuple(device.port_numbers or ())
+        self._inventory_boundary='KEY_ADDRESS_READ';address=device.address
+        self._inventory_boundary='KEY_VALIDATE'
+        try:return _Key(pid,bus,ports,address)
+        except ValueError:
+            try:self._inventory_key_fields=diagnostics.rejected_key_fields(pid,bus,ports,address)
+            except BaseException as recording:self._inventory_record_error=diagnostics.error_name(recording)
+            raise
 
     def inventory(self):
+        self._inventory_key_fields=[]
         devices,util=self._devices()
         try:result=tuple(self.key(d) for d in devices)
         except BaseException:
             self._dispose_all(util,devices,suppress=True);raise
+        self._inventory_boundary='ENUMERATION_DISPOSE'
         self._dispose_all(util,devices);return result
 
     def open(self,key):
@@ -330,6 +347,7 @@ class _Host:
         self.lease_acquired=self.lease_release_confirmed=False
         self.cleanup_error_types=[]
         self.returned_observation=None
+        self.inventory_calls=0;self.inventory_diagnostic=None
 
     def __enter__(self):
         if self.used:raise RuntimeError('One host lease only')
@@ -368,13 +386,29 @@ class _Host:
 
     def step(self,name,action):
         if self.lock is None or self.blocked:raise RuntimeError('Host lease stopped or missing')
+        inventory=name=='INVENTORY';boundary='HOST_PRECHECK'
+        if inventory:self.inventory_calls+=1
         try:
-            self.check();self.event('HOST_INTENT',operation=name)
+            self.check();boundary='HOST_INTENT';self.event('HOST_INTENT',operation=name)
+            boundary='CALLBACK'
+            if inventory:
+                self.ops._inventory_boundary='CALLBACK';self.ops._inventory_key_fields=[];self.ops._inventory_record_error=None
             result=action()
-            self.check();self.event('HOST_ACK',operation=name)
+            boundary='HOST_POSTCHECK';self.check();boundary='HOST_ACK';self.event('HOST_ACK',operation=name)
             return result
-        except BaseException:
-            self.blocked=True;raise
+        except BaseException as error:
+            self.blocked=True
+            if inventory and self.inventory_diagnostic is None:
+                try:
+                    stage=self.ops._inventory_boundary if boundary=='CALLBACK' else boundary
+                    fields=self.ops._inventory_key_fields if stage=='KEY_VALIDATE' else ()
+                    recording=self.ops._inventory_record_error if boundary=='CALLBACK' else None
+                    failure=diagnostics.make_inventory_failure(stage,error,fields) if recording is None else None
+                    self.inventory_diagnostic={'inventory_call':self.inventory_calls,'failure':failure,'record_error_type':recording}
+                except BaseException as recording:
+                    self.inventory_diagnostic={'inventory_call':self.inventory_calls,'failure':None,
+                                               'record_error_type':diagnostics.error_name(recording)}
+            raise
 
     def dispose(self,device):
         # Local cleanup is attempted even if the journal is already broken.

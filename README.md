@@ -10,7 +10,7 @@
 
 - **只有CUBE/参考图、还没内部备份：** 用[纯机外preview](docs/COMPUTER-ONLY-PREVIEW.md)拟合/看图/看超限原因，无需归档或机身材料；真实机内色彩尚未验证。
 - **现在先运行完整离线演示：** [统一入口与结果说明](docs/OFFLINE-WORKFLOW.md)，串通CUBE拟合、参考图/误差、私人包与程序/名称/设置逆向检查；默认材料全自制，无需相机。
-- **跟进开发：** [后续交付计划](docs/DELIVERY-PLAN.md)按“名称/设置收口→统一离线演练→真实只读采集→单槽验证→摄影验收”推进；[当前交接](research/HANDOFF.md)列下一动作。D1–D3离线冻结，D4于10月24日[新采集](docs/CAPTURE-TRIAL-REVIEW.md)停在USB枚举边界，ValueError、6事件、0材料；身份查询/认证未开始。已停止设备命令，先离线补枚举定位；第六十七轮身份查询USBError及旧UNKNOWN独立保留。
+- **跟进开发：** [后续交付计划](docs/DELIVERY-PLAN.md)按“名称/设置收口→统一离线演练→真实只读采集→单槽验证→摄影验收”推进；[当前交接](research/HANDOFF.md)列下一动作。D1–D3离线冻结，D4于10月24日[新采集](docs/CAPTURE-TRIAL-REVIEW.md)停在USB枚举边界，ValueError、6事件、0材料；身份查询/认证未开始。本人已断开，第七十轮[有限枚举定位/回执兼容](docs/CAPTURE-INVENTORY-DIAGNOSTICS.md)离线完成，真实原因仍未知；旧UNKNOWN独立保留，尚未准备新采集命令。
 - **获取内部材料：** 另读[首次采集说明](docs/CAPTURE-FIRST-USE.md)，仅支持固定原厂2.01/完整程序身份；本人已确认官方2.01，最新失败保留UNKNOWN，不能重跑示例试错。
 - **安装旧FL2/FL3：** 使用[旧安装指南](docs/AI-INSTALL.md)及下方教程；它有独立的适用条件、操作范围和验证边界，新LUT尚未提供机内安装入口。
 

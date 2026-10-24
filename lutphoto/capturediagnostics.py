@@ -1,4 +1,4 @@
-"""Finite identity-failure metadata only; no I/O, exception text or device data."""
+"""Finite failure metadata only; no I/O, exception text or device data."""
 from array import array
 import re
 
@@ -74,4 +74,51 @@ def valid_records(value):
         if record['failure'] is None:
             if not valid_error(record['record_error_type']):return False
         elif not valid_failure(record['failure']) or record['record_error_type'] is not None:return False
+    return True
+
+
+INVENTORY_SCHEMA='a7c2-host-inventory-failure/1'
+INVENTORY_BOUNDARIES={'HOST_PRECHECK','HOST_INTENT','CALLBACK','NATIVE_RUNTIME',
+    'SDK_FIND_NORMAL','SDK_FIND_SERVICE','INVENTORY_LIMIT','KEY_VENDOR_READ','KEY_VENDOR_CHECK',
+    'KEY_PID_READ','KEY_BUS_READ','KEY_PORTS_READ','KEY_ADDRESS_READ','KEY_VALIDATE',
+    'ENUMERATION_DISPOSE','HOST_POSTCHECK','HOST_ACK'}
+KEY_FIELDS=('PID','BUS','PORTS','ADDRESS')
+
+
+def rejected_key_fields(pid,bus,ports,address):
+    """Only names of invalid cached fields; never re-read SDK properties."""
+    return [name for name,valid in zip(KEY_FIELDS,(
+        type(pid) is int and pid in (0x0e8a,0x0336),
+        type(bus) is int and bus>0,
+        type(ports) is tuple and 1<=len(ports)<=16 and all(type(p) is int and 1<=p<=255 for p in ports),
+        type(address) is int and 1<=address<=127)) if not valid]
+
+
+def valid_inventory_failure(value):
+    fields={'schema','operation','boundary','invalid_key_fields','reason_type','errno','backend_error_code'}
+    if (type(value) is not dict or set(value)!=fields or value['schema']!=INVENTORY_SCHEMA
+            or value['operation']!='INVENTORY' or type(value['boundary']) is not str
+            or value['boundary'] not in INVENTORY_BOUNDARIES or not valid_error(value['reason_type'])
+            or any(value[k] is not None and not _code(value[k]) for k in ('errno','backend_error_code'))):return False
+    names=value['invalid_key_fields']
+    if type(names) is not list or any(type(n) is not str or n not in KEY_FIELDS for n in names):return False
+    return names==[n for n in KEY_FIELDS if n in names] and (not names or value['boundary']=='KEY_VALIDATE')
+
+
+def make_inventory_failure(boundary,error,invalid_key_fields=()):
+    value={'schema':INVENTORY_SCHEMA,'operation':'INVENTORY','boundary':boundary,
+           'invalid_key_fields':list(invalid_key_fields),'reason_type':error_name(error),
+           'errno':_error_code(error,'errno'),'backend_error_code':_error_code(error,'backend_error_code')}
+    if not valid_inventory_failure(value):raise ValueError('Invalid bounded inventory diagnostic')
+    return value
+
+
+def valid_inventory_records(value):
+    if type(value) is not list or len(value)>1:return False
+    for record in value:
+        if (type(record) is not dict or set(record)!={'inventory_call','failure','record_error_type'}
+                or type(record['inventory_call']) is not int or not 1<=record['inventory_call']<=2048):return False
+        if record['failure'] is None:
+            if not valid_error(record['record_error_type']):return False
+        elif not valid_inventory_failure(record['failure']) or record['record_error_type'] is not None:return False
     return True

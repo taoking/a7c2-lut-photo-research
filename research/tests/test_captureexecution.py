@@ -207,7 +207,7 @@ class ExecutionTests(unittest.TestCase):
         for name,options,want in (('old-complete',{},'CONSISTENT_EXERCISE_RECORDS'),
                                   ('old-unknown',{'initial':initial},'NEEDS_REVIEW_UNKNOWN')):
             result,_,d,r=self.make(name,**options)
-            legacy=copy.deepcopy(result);legacy['schema']=e.LEGACY_RECEIPT_SCHEMA;del legacy['identity_diagnostics']
+            legacy=copy.deepcopy(result);legacy['schema']=e.LEGACY_RECEIPT_SCHEMA;del legacy['identity_diagnostics'];del legacy['host_diagnostics']
             r.write_bytes(encoded(legacy));before=r.read_bytes()
             self.assertTrue(e.valid_receipt(legacy))
             checked=e.inspect_directory(d,receipt=r)

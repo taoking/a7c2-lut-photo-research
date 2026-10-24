@@ -18,7 +18,8 @@ from . import capturediagnostics as diagnostics
 CHECKPOINT='native-checkpoint.private.json'
 CHECKPOINT_SCHEMA='a7c2-native-capture-checkpoint/1'
 LEGACY_RECEIPT_SCHEMA='a7c2-capture-terminal-receipt/1'
-RECEIPT_SCHEMA='a7c2-capture-terminal-receipt/2'
+IDENTITY_RECEIPT_SCHEMA='a7c2-capture-terminal-receipt/2'
+RECEIPT_SCHEMA='a7c2-capture-terminal-receipt/3'
 KINDS=('native','self-made-sdk')
 UNPROVEN=('physical_protocol_verified','body_binding_verified','chip_roles_verified','outer_wrapper_verified',
     'snapshot_freshness_verified','atomic_capture_verified','independent_media_verified','native_execution_verified',
@@ -60,9 +61,11 @@ def valid_receipt(value):
             'material_observations_complete','attempted','cleanup','cancel_requested','errors','unproven'}
     if type(value) is not dict or type(value.get('schema')) is not str:return False
     current=value['schema']==RECEIPT_SCHEMA
-    if (value['schema'] not in (LEGACY_RECEIPT_SCHEMA,RECEIPT_SCHEMA)
-            or set(value)!=fields|({'identity_diagnostics'} if current else set())
-            or current and not diagnostics.valid_records(value['identity_diagnostics'])
+    identity=value['schema'] in (IDENTITY_RECEIPT_SCHEMA,RECEIPT_SCHEMA)
+    if (value['schema'] not in (LEGACY_RECEIPT_SCHEMA,IDENTITY_RECEIPT_SCHEMA,RECEIPT_SCHEMA)
+            or set(value)!=fields|({'identity_diagnostics'} if identity else set())|({'host_diagnostics'} if current else set())
+            or identity and not diagnostics.valid_records(value['identity_diagnostics'])
+            or current and not diagnostics.valid_inventory_records(value['host_diagnostics'])
             or value['private_report'] is not True or not valid_context(value['context'])
             or not _false(value['unproven']) or value['checkpoint'] is not None and not i._info(value['checkpoint'])
             or type(value['phase']) is not str or value['phase'] not in ('CAPTURE_COMPLETE','EXERCISE_COMPLETE','NEEDS_REVIEW')
@@ -76,9 +79,13 @@ def valid_receipt(value):
     for error in errors:
         if (type(error) is not dict or set(error)!={'stage','reason_type'} or type(error['stage']) is not str
                 or error['stage'] not in ERROR_STAGES or not valid_error(error['reason_type'])):return False
-    if current and value['identity_diagnostics']:
+    if identity and value['identity_diagnostics']:
         if value['phase']!='NEEDS_REVIEW' or not errors:return False
         for record in value['identity_diagnostics']:
+            if record['failure'] is not None and not any(error['reason_type']==record['failure']['reason_type'] for error in errors):return False
+    if current and value['host_diagnostics']:
+        if value['phase']!='NEEDS_REVIEW' or not errors or value['identity_diagnostics']:return False
+        for record in value['host_diagnostics']:
             if record['failure'] is not None and not any(error['reason_type']==record['failure']['reason_type'] for error in errors):return False
     if value['phase']!='NEEDS_REVIEW':
         phase='CAPTURE_COMPLETE' if value['context']['execution_kind']=='native' else 'EXERCISE_COMPLETE'
@@ -106,7 +113,7 @@ class _Evidence(i._Evidence):
 
     def __init__(self):
         super().__init__();self.context=None;self.checkpoint_info=None;self.checkpoint=None
-        self.program_positions=[];self.snapshot_positions=[];self.guard_positions=[]
+        self.program_positions=[];self.snapshot_positions=[];self.guard_positions=[];self.inventory_events=[]
 
     def details_valid(self,event,details):
         if event=='CAPTURE_CONTEXT':
@@ -118,6 +125,7 @@ class _Evidence(i._Evidence):
         return super().details_valid(TO_GRAPH.get(event,event),details)
 
     def semantic_event(self,event,details):
+        if event in ('HOST_INTENT','HOST_ACK') and details.get('operation')=='INVENTORY':self.inventory_events.append(event)
         if event=='PROGRAM_PAIR_MATCHED':self.program_positions.append((len(self.acks),bool(self.pending or self.host_pending)))
         if event=='SNAPSHOT_FORMAT_CHECKED':self.snapshot_positions.append((details.get('file'),len(self.acks),bool(self.pending or self.host_pending)))
         if event=='GUARDS_ABSENT':self.guard_positions.append((len(self.acks),bool(self.pending or self.host_pending)))
@@ -239,9 +247,26 @@ def _diagnostics_match(records,checkpoint):
     return True
 
 
+def _host_diagnostics_match(records,evidence):
+    if not records:return True
+    if evidence.checkpoint is None:return None
+    record=records[0];number=record['inventory_call'];failure=record['failure']
+    intents=evidence.inventory_events.count('HOST_INTENT');acks=evidence.inventory_events.count('HOST_ACK')
+    if failure is None:
+        valid=number in (intents,intents+1) and acks in (number-1,number)
+    elif failure['boundary']=='HOST_PRECHECK':valid=number==intents+1 and acks==number-1
+    elif failure['boundary']=='HOST_INTENT':valid=number in (intents,intents+1) and acks==number-1
+    elif failure['boundary']=='HOST_ACK':valid=number==intents and acks in (number-1,number)
+    else:valid=number==intents and acks==number-1
+    if number==1:
+        flow=evidence.checkpoint['flow']
+        valid &= all(flow[k]==0 for k in COUNTS) and flow['authentication_phase']=='NOT_STARTED' and not flow['transition_started']
+    return valid
+
+
 def inspect_directory(directory,*,receipt=None):
     """Inspect records, never confer hardware identity or recovery permission."""
-    reader=evidence=None;material='INCOMPLETE';terminal='MISSING';kind=None;classification='NEEDS_REVIEW_INCOMPLETE';identity_diagnostics=None
+    reader=evidence=None;material='INCOMPLETE';terminal='MISSING';kind=None;classification='NEEDS_REVIEW_INCOMPLETE';identity_diagnostics=host_diagnostics=None
     try:
         reader=i._Reader(directory);evidence=_Evidence()
         expected=set(i.MATERIALS)|{CHECKPOINT,'session.lock'}|{f'events/{n:08d}.json' for n in range(2048)}
@@ -257,12 +282,17 @@ def inspect_directory(directory,*,receipt=None):
                 evidence.problem('TERMINAL_BINDING_OR_SCHEMA',contradiction=True);terminal='INCONSISTENT'
             else:
                 terminal='MATCHED_COMPLETE' if exit_code(value)==0 else 'MATCHED_FAILURE'
-                if value['schema']==RECEIPT_SCHEMA:
+                if value['schema'] in (IDENTITY_RECEIPT_SCHEMA,RECEIPT_SCHEMA):
                     matched=_diagnostics_match(value['identity_diagnostics'],evidence.checkpoint)
                     if matched is None:evidence.problem('IDENTITY_DIAGNOSTIC_UNBOUND')
                     elif not matched:
                         evidence.problem('IDENTITY_DIAGNOSTIC_DIFFERS',contradiction=True)
                     else:identity_diagnostics=value['identity_diagnostics']
+                if value['schema']==RECEIPT_SCHEMA:
+                    matched=_host_diagnostics_match(value['host_diagnostics'],evidence)
+                    if matched is None:evidence.problem('HOST_DIAGNOSTIC_UNBOUND')
+                    elif not matched:evidence.problem('HOST_DIAGNOSTIC_DIFFERS',contradiction=True)
+                    else:host_diagnostics=value['host_diagnostics']
         reader.check()
         if evidence.inconsistent:material='INCONSISTENT';classification='EVIDENCE_INCONSISTENT'
         elif evidence.pending or evidence.host_pending or evidence.unknown:material='UNKNOWN';classification='NEEDS_REVIEW_UNKNOWN'
@@ -277,9 +307,10 @@ def inspect_directory(directory,*,receipt=None):
         if reader is not None:
             try:reader.close()
             except BaseException:classification='REFUSED';refusal='INSPECTION_RELEASE_UNCONFIRMED'
-    return {'schema':'a7c2-readonly-capture-evidence-inspection/2','private_report':True,'classification':classification,
+    return {'schema':'a7c2-readonly-capture-evidence-inspection/3','private_report':True,'classification':classification,
         'material_evidence':material,'terminal_evidence':terminal,'execution_kind_declared':kind,
         'identity_diagnostics':identity_diagnostics if classification not in ('REFUSED','EVIDENCE_INCONSISTENT') else None,
+        'host_diagnostics':host_diagnostics if classification not in ('REFUSED','EVIDENCE_INCONSISTENT') else None,
         'issues':sorted(evidence.issues) if evidence and classification!='REFUSED' else [refusal] if classification=='REFUSED' else [],
         'journal_records_checked':evidence.count if evidence else 0,'materials_hashed':len(evidence.actual) if evidence else 0,
         'inspection_only':True,'camera_operations_performed':False,'program_policy_revalidated':False,
