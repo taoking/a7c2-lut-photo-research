@@ -2,6 +2,8 @@
 
 第六十八轮在[既有固定身份查询](../lutphoto/capturemsc.py)、[所有者回调](../lutphoto/capturemac.py)和[私人调用回执](CAPTURE-EVIDENCE.md)中记录首个IO/回调失败；不增加查询、端点清除、重试、认证或机内诊断动作。仅通过自制SDK验证，尚未取得真实新诊断正例。第六十七轮实机失败的步骤/错误码仍缺失，不能事后找回或补写。
 
+10月24日[第六十九轮新作业](../research/LUT链路调查记录-第六十九轮.md)在INVENTORY意图无ACK的边界发生ValueError，身份查询尚未开始，因此新回执identity_diagnostics为空；6事件/0材料并未验证本页身份IO诊断。该边界具体原因未记录，下一步先离线补有限枚举定位，不重采。
+
 ## 记录在哪里
 
 新回执为`a7c2-capture-terminal-receipt/2`，增加`identity_diagnostics`，最多一个失败项；成功时为空列表。作业检查点仍为原来的`a7c2-native-capture-checkpoint/1`，事件词汇与哈希链不改，不新增作业文件或第二份备份。回执仍经原入口的私人文件排他预留、写入/同步/完整读回、关闭流程传递。

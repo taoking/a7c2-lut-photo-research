@@ -2,6 +2,8 @@
 
 第五十六轮交付[内部装配](../lutphoto/captureexecution.py)和[独立检查器](../lutphoto/captureevidence.py)，复用NativeOps/Host、所有权核心、固定协议、Store与只读图检查。第五十七轮交付[公开首次采集入口](CAPTURE-FIRST-USE.md)的自制SDK离线验收；[第六十七轮](../research/LUT链路调查记录-第六十七轮.md)实际打开接口后，身份查询发生USBError，0材料，尚无完整首采正例。当前暂停设备命令，保留NEEDS_REVIEW_UNKNOWN；候选模块的旧capture仍拒绝，源码review不能授权或启用设备操作。
 
+10月24日[第六十九轮新尝试](../research/LUT链路调查记录-第六十九轮.md)在INVENTORY意图后无ACK，ValueError/6事件/0材料，身份与认证尚未开始；回执`/2`由管理员上下文自动文件检查得NEEDS_REVIEW_UNKNOWN/MATCHED_FAILURE，identity_diagnostics为空。原采集/检查退出1，摘要导出0不代表成功；旧第六十七轮记录不改，下一步先离线补枚举定位。
+
 ## 两份记录的边界
 
 | 记录 | 生成时点与内容 | 不能证明 |
