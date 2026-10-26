@@ -1,25 +1,55 @@
 # LUT 照片开发：当前交接
 
-更新：2026-10-25，第七十二轮。先读根规则、README、[四列计划](../plan.md)、[本轮记录](LUT链路调查记录-第七十二轮.md)、[总线兼容说明](../docs/CAPTURE-BUS-COMPATIBILITY.md)。N1完成，N2离线完成/真实ST未证，N3部分完成，N4未执行；D1–D3冻结，D4仍无完整采集正例。
+更新：2026-10-26，第七十七轮。后续AI先读根AGENTS、README、[四列计划](../plan.md)、本文件和[第77轮记录](LUT链路调查记录-第七十七轮.md)。本文件是接续入口；历史见[轮次索引](ROUNDS.md)。不能只凭“继续”重跑相机命令。
 
-## 当前决定与下一动作
+## 当前状态与最新授权
 
-本人最新选择“保持现状，稍后采集”。新单次准备已完成，但没有执行；不要求改变当前连接、不假定已连接或断开、不自动启动或定时采集。等本人主动开始后，再核对实际直连/MSC和官方原厂2.01状态，即时电量与管理员认证只在本人终端完成。授权仍仅采集和检查，禁止更新/修改相机。
+D1–D3离线冻结；R1读包修正、R2有限服务入口和R3单次准备完成。1122项完整离线回归、15项准备测试通过。**本项目仍无真机成功；D4真实材料0，旧完整入口仍先查MSC身份。** D5/D6及真正3D LUT支线后置。
 
-新位置索引在忽略目录custom-round72/reviewed-capture-location.private.json；主程序、文件复核器、启动器和测试均已冻结，167份源码/依赖文件指纹通过。16项准备测试和电脑端预检查通过，所需空间357258024字节且足够；未创建管理员作业、取得相机锁或加载SDK。新的单次范围仍为原先74份材料，未增加设备接口/重试/写入。第六十七/六十九/七十一轮旧单次命令已用，禁止再运行，原日志/回执/脚本不修改。
+本人本轮授权提交推送，随后主动要求继续并明确确认“已连接MSC，仍为官方原厂2.01”。这次可进入新有限probe；只读一份RAM快照，服务认证会临时改变连接状态，不加载机内模块、不更新/写程序/保存设置。不再次索取已有授权；实际电量仍须现场输入，密码仅在本机终端。该声明不是完整程序指纹或拍摄/恢复证明。
 
-## 本轮电脑修正与验证
+此交接写入时准备与离线检查完成，尚未启动管理员/设备分支。**后续进程必须先查看下述本地定位文件和新结果是否存在；如果已经派发或有任何结果，先核对，不再启动。** 文件不存在也不能独立证明未尝试；须结合当前会话及定位记录判断。旧第67/69/71轮禁止重跑，第72轮继续暂停。
 
-固定libusb v1.0.30 Darwin源码明确总线从0编号，PyUSB v1.3.1保留uint8_t原值；本机两份PyUSB源文件与固定来源字节一致，未更换依赖。只将4处电脑端总线校验统一为精确整数0–255；0原样保留，继续严格比较原总线/完整端口路径，拒绝未知值、类型错误、总线/端口变化及重复机身。机身身份、完整程序指纹、协议、SDK调用和收尾未改。
+## 本地准备位置与执行顺序
 
-1033项研究、39项旧Mac和8项固定上游回归全部通过，共1080项；另16项单次准备通过。AST/无SDK导入/固定来源检查通过；全为离线证据，不能声称真机故障已修复。测试命令/结果见本轮记录。
+忽略目录`research/output/custom-round77/location.private.json`保存新操作文件、摘要读取器、一次性.command、结果日志、仓库外作业/独立回执的位置，以及3个操作文件摘要。新文件名：`probe-reviewed-once.py`、`read-probe-receipt.py`、`run-reviewed-probe-once.command`。不要运行`build-preparation.py`重新生成路径；它只是本轮生成过程。不存在这些私人文件时不能照抄公开示例直接开始，应重新准备并审阅。
 
-## 最新真实事实与缺口
+1. 先看定位记录的派发/执行信息和结果日志是否存在。核对3个文件摘要，再只导入操作模块调用`verify_reviewed_source()`，不要调用`main()`作检查。172文件冻结含新probe/identity和依赖；变化即重新审阅，不改旧摘要放行。
+2. 当前本人已确认MSC/官方原厂2.01。没有后续断开或版本变更信息时不重复确认；若隔轮且实际状态不明再核对。启动一次性.command，在本机终端完成管理员认证和即时整数电量50–100。不要在代理后台输入密码，也不要填上次电量。
+3. 一次性操作只调用一次`captureprobe.main`，没有74材料串接、重试、复位、清端点/sense、WBI或旧prepare/diagnose。新作业/回执排他创建，日志0600/noclobber；执行后不能再运行，即使入口前拒绝也先核对原因。
+4. 返回后核对原CLI摘要、`PROBE_CLI_EXIT_CODE`、`RECEIPT_SUMMARY_EXIT_CODE`和外层结果。摘要子进程只读新回执，成功不覆盖原调用失败。若日志缺失/中断/未结束，保持现场，不自动重采或强杀。
+5. 成功或失败均分别核对认证、快照身份、停止服务、普通USB重现、本地关闭与错误。需要正常USB断开时确认本人当前画面和7号存取灯；不凭充电灯判断，不强制重启/取电池。本人报告正常菜单、冷启动/拍摄应各自记录，不能从USB返回推断。
 
-最新实测仍是第七十一轮：6事件、ValueError、NEEDS_REVIEW_UNKNOWN、0材料、0已打开句柄/身份查询/认证/传输，服务切换未开始。宿主诊断为inventory_call:1、KEY_VALIDATE、invalid_key_fields:[BUS]；没有保存原始bus值，不能断言当时为0。原CLI退出1、文件复核退出1/MATCHED_FAILURE、摘要导出0不是采集成功。结果索引在custom-round71；本轮不回填旧结果。
+正常流程全程120秒合作式预算，协议调用最长5秒，单段等待20秒；SDK/文件系统管理仍可能阻塞。未知/取消/日志失败不发新命令；完整响应内容拒绝才允许健康单次停止。
 
-第六十九轮6事件/ValueError没有内部边界，第六十七轮41事件/USBError、13调用/8451字节没有错误码，仍各自0材料/UNKNOWN。总线有效域修正没有解决或排除旧USBError。此前本人确认画面正常及7号存取灯熄灭，已提示普通USB断开；实际断开未确认，当天连接不猜测，人工观察不补填冷启动/回放/驱动或恢复验收。
+## 结果边界及后续路线
 
-D4真实程序/74材料及完整退出仍缺，D5事务/恢复、独立介质备份与N4单槽/真实色彩继续后置。真正3D LUT保留[第二十八轮支线缺口](LUT链路调查记录-第二十八轮.md#遗留与交接)。总任务未完成。
+私有回执schema为`a7c2-service-probe-result/1`，stdout为`a7c2-service-probe-cli-result/1`。0/PROBE_COMPLETE只表示一次快照身份、健康停止、同端口普通USB重现及本地交付完成。`normal_identity_rechecked`、`program_fingerprints_verified`、`complete_backup`、恢复/写入/续跑始终false；没有第三句柄或返回序列复查。
 
-本轮仅向lut-photo/main提交代码、测试及脱敏说明，提交推送以Git为准。开始时8份既有改动快照保留；README/DELIVERY/plan原分析及5份未跟踪报告不纳入本轮发布，PRIVATE/移动盘未读改上传。历史查[轮次索引](ROUNDS.md)。
+专用摘要为`a7c2-service-probe-local-summary/1`，`scope=receipt-fields-only`、`graph_checked=false`、`hardware_verified=false`。只核对私有普通文件边界、严格布尔字段和明显矛盾，不独立验证事件图、快照绑定或硬件事实。没有新增通用probe图检查器。原快照、身份摘要、位置和日志都是私人资料，不能公开。旧`captureevidence inspect`有意拒绝新schema，不改schema消除拒绝。
+
+R3成功后先审阅将服务优先入场接入完整采集的必要改动，再安排R4全材料及有界复读；不能直接运行仍采用MSC入场的74材料命令。完整程序指纹门槛没有豁免。若同阶段再次失败且无新证据，按[交付计划](../docs/DELIVERY-PLAN.md)评估原生Windows 11只读对照或后置Mac，不继续堆模拟轮次/反复重连。
+
+实现：[captureprobe](../lutphoto/captureprobe.py)、[captureidentity](../lutphoto/captureidentity.py)；专项测试[17项](tests/test_captureprobe.py)。完整采集与证据契约仍在[captureexecution](../lutphoto/captureexecution.py)/[captureevidence](../lutphoto/captureevidence.py)。操作说明见[有限入口](../docs/CAPTURE-SERVICE-PROBE.md)、[新旧准备](../docs/CAPTURE-TRIAL-REVIEW.md)。
+
+## 本轮实际离线验证
+
+Python3.14.6，自制数据/SDK；命令及日志均在本机执行：
+
+- `.venv/bin/python -B -m unittest discover -s research/tests -v`：1075项通过，83.706秒。
+- `.venv/bin/python -B -m unittest discover -s tests -v`：39项通过。
+- `.venv/bin/python -B -m unittest discover -s .upstream/a7c2_fl23_preview/tests -v`：8项通过；完整回归共1122项。
+- `.venv/bin/python -B research/output/custom-round77/test_preparation.py`：15项通过，含真实-S文件读取子进程、单快照自制成功/未知失败、退出码、源码漂移、链接/超限、旧目录、锁、摘要隐私及单次控制流。初次测试误把清单中的capturecamera文件名判作调用，改为AST名称检查后全15项通过；不是生产问题。
+- `.venv/bin/python -B -m macfl23 check`：固定来源/资产通过。
+- `.venv/bin/python -B research/output/custom-round74/check-legacy-receipts.py`：3类自制旧回执分类/字节不变。
+- `.venv/bin/python -S -B -m lutphoto.captureprobe --help`：参数匹配；无SDK/USB。
+- 普通用户临时私有目录`capturepreflight.inspect(...,resources=False)`：通过，285954856字节保守预算，管理员标志false、未加载SDK、未创建作业。
+- `.venv/bin/python -B research/output/custom-round77/check-publication.py`：公开范围、链接、隐私、172冻结、旧文件与来源保留检查；详细结果在本轮忽略目录。`git diff --check`检查通过后才提交。
+
+## 历史现场、发布与交接
+
+第71轮KEY_VALIDATE/BUS、6事件、0身份/认证/材料、UNKNOWN，未记录原bus值。第69轮枚举ValueError缺内部边界，第67轮身份USBError只有13调用/8451接受字节；不回填原因。第72轮167冻结有8个路径已改变且不含新入口，操作文件仍原字节保留，不再可用。
+
+开工HEAD为`d94a4628171aeacbebfc707f98bc1d8d2cb34a09`；34项既有修改/新文件已快照在本轮忽略目录initial。本轮没有修改公开运行代码，只准备私人操作/测试并更新文档。提交范围包含保留的第73–76轮源码/测试/记录、此前五份公开专项分析及本轮交接；固定锁、安装器、依赖、完整程序策略不改。
+
+本人已授权发布到`lut-photo/main`（taoking/a7c2-lut-photo-research），不能推继承的origin。提交及远端结果以本轮最终回执、Git日志与远端main一致性为准；私人材料不进入Git。每轮结束更新本文件、轮次记录和四列计划，区分代码完成、操作准备、已派发与真机验收；实际执行一旦发生必须更新本段状态和定位记录，不能沿用“未启动”。

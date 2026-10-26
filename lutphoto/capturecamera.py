@@ -77,8 +77,11 @@ class _Receipt:
 
     def save(self,receipt):
         if not e.valid_receipt(receipt) or receipt['context']['execution_kind']!='native':raise ValueError('Native terminal receipt required')
-        raw=encoded(receipt)
-        if len(raw)>131072:raise ValueError('Receipt exceeds bound')
+        self._save_raw(encoded(receipt))
+
+    def _save_raw(self,raw):
+        """Private persistence primitive; each frontend validates its own schema."""
+        if type(raw) is not bytes or not 0<len(raw)<=131072:raise ValueError('Receipt exceeds bound')
         self.check()
         if os.fstat(self.fd).st_size!=0:raise ValueError('Empty reserved receipt required')
         view=memoryview(raw)

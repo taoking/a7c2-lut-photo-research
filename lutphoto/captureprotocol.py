@@ -1,9 +1,10 @@
-"""Passive, offline Senser request/framing model; no driver, USB or auth.
+"""Passive Senser request/framing parser; no driver, USB or auth of its own.
 
 Encodings derive from pinned QAQLeonard transport and ma1co Sony-PMCA-RE.
 See ACKNOWLEDGEMENTS.md and the retained Sony-PMCA-RE MIT license.
 Response echo/zero-field checks are a conservative, UNVERIFIED profile.
-This is not a camera adapter and must not be attached to a live Session.
+Used by both synthetic sessions and the restricted native capture owner.
+File/snapshot length-delimited reads follow QAQLeonard 3.0.3; see round 74.
 """
 from dataclasses import dataclass
 from types import MappingProxyType
@@ -15,7 +16,6 @@ from .capturestore import Budget, Sink
 HEADER = struct.Struct('<IHH4B')
 FRAME = 0x100000
 BLOCK = 0x8000
-DRAIN = 0x200
 MAX_REQUESTS = 512
 MAX_FEEDS = 65536
 MAX_REQUEST_BYTES = 1024
@@ -77,10 +77,11 @@ def _requests(stock, resources, guards=()):
 
 
 class OfflineChannel:
-    """Generate fixed request bytes and consume explicit synthetic read results.
+    """Generate fixed request bytes and consume explicit read results.
 
-The caller feeds ONE result per Read, preserving the separate drain read.
-No callback can open a device here. begin() models a possibly sent request;
+The legacy class name is retained. The caller feeds ONE result per Read;
+empty transfers carry no bytes and never renew the shared deadline or budget.
+No callback can open a device here. begin() records a possibly sent request;
 abort() after begin poisons the channel, including a partial outbound write.
 """
     def __init__(self, archive, *, resources=False, guards=False, budget=None):
@@ -98,11 +99,11 @@ abort() after begin poisons the channel, including a partial outbound write.
         self.budget = Budget(payload) if budget is None else budget
         if type(self.budget) is not Budget:
             raise TypeError('Host Budget required')
-        # One budget/deadline across all replies. Include requests, status words,
-        # frame headers and worst-case separate drain reads, not just file bytes.
+        # One budget/deadline across all replies. Include requests, status words
+        # and frame headers. Empty transfers count against MAX_FEEDS and time,
+        # not bytes; no extra read is scheduled after a completed response.
         cap = self.budget.limit
-        self.wire_limit = (cap + MAX_REQUESTS * (MAX_REQUEST_BYTES + HEADER.size + DRAIN + 4)
-            + ((cap + BLOCK - 1) // BLOCK) * DRAIN
+        self.wire_limit = (cap + MAX_REQUESTS * (MAX_REQUEST_BYTES + HEADER.size + 4)
             + ((cap + FRAME - 1) // FRAME) * HEADER.size)
         self.wire_bytes = self.feeds = self.calls = 0
         self.sequence, self.selected = 1, None
@@ -121,7 +122,7 @@ abort() after begin poisons the channel, including a partial outbound write.
 
     def begin(self, name, sink=None):
         if self.active or self.blocked or self.exit_claimed:
-            raise RuntimeError('Offline channel cannot issue another request')
+            raise RuntimeError('Channel cannot issue another request')
         try:
             self._check()
             if type(name) is not str or name not in self.requests:
@@ -158,35 +159,37 @@ abort() after begin poisons the channel, including a partial outbound write.
 
     def next_read(self):
         if not self.active:
-            raise RuntimeError('No active synthetic response')
+            raise RuntimeError('No active response')
         try:
             if self.feeds >= MAX_FEEDS:
                 raise ValueError('Read-result budget exhausted')
             self._check(self.need)
             left = int((self.budget.deadline - self.budget.clock()) * 1000)
             if left <= 0:
-                raise TimeoutError('Offline protocol deadline expired')
+                raise TimeoutError('Protocol deadline expired')
             return Read(self.phase, self.need, left)
         except BaseException:
             self._poison()
             raise
 
     def feed(self, raw):
-        """Consume one bounded read result. Header is exact; data may fragment.
+        """Consume one bounded read result. Nonempty headers remain exact.
 
-        Drain content/length is ignored by upstream, including zero length. It
-        remains a distinct bounded read and is never passed to the file sink.
+        Data may fragment. A zero-length transfer leaves the current phase and
+        remaining length unchanged. Nonempty data is never treated as drain.
+        Any optional final empty transfer is left for the next normal read.
         """
         if not self.active:
             self._poison()
             raise RuntimeError('Unsolicited read result outside an active response')
         expected = self.next_read()
         try:
-            if (type(raw) is not bytes or len(raw) > expected.maximum
-                    or not raw and self.phase != 'drain'):
-                raise ValueError('Invalid, empty or excessive read result')
+            if type(raw) is not bytes or len(raw) > expected.maximum:
+                raise ValueError('Invalid or excessive read result')
             self.feeds += 1
             self.wire_bytes += len(raw)
+            if not raw:
+                return None
             if self.phase == 'header':
                 if len(raw) != HEADER.size:
                     raise ValueError('Short Senser header')
@@ -223,17 +226,10 @@ abort() after begin poisons the channel, including a partial outbound write.
                 self.need -= len(raw)
                 self.frame_left -= len(raw)
                 if not self.need:
-                    if self.chunk_size % DRAIN == 0:
-                        self.phase, self.need = 'drain', DRAIN
-                    elif self.frame_left:
+                    if self.frame_left:
                         self._data_chunk()
                     else:
                         return self._frame_end()
-            else:
-                if self.frame_left:
-                    self._data_chunk()
-                else:
-                    return self._frame_end()
             return None
         except BaseException:
             # _frame_end marks framing consumed before status/content/fsync
@@ -246,7 +242,7 @@ abort() after begin poisons the channel, including a partial outbound write.
 
     def _data_chunk(self):
         self.phase = 'data'
-        self.need = self.chunk_size = min(self.frame_left, BLOCK)
+        self.need = min(self.frame_left, BLOCK)
 
     def _frame_end(self):
         if self.more:
@@ -274,6 +270,8 @@ abort() after begin poisons the channel, including a partial outbound write.
             self.selected = self.name[7:]
         elif self.name.startswith('read:'):
             self.selected = None
+        # Retain the legacy passive-parser receipt fields. This parser cannot
+        # attest the source of fed bytes; the outer capture owner reports I/O.
         self.result = {'operation': self.name, 'payload': info, 'frames': self.frames,
             'simulation_only': True, 'physical_protocol_verified': False,
             'response_profile_verified': False, 'camera_operations_performed': False}

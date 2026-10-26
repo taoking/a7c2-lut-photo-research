@@ -12,8 +12,11 @@ from lutphoto import captureprotocol as p
 from lutphoto.capturestore import Budget, Sink
 
 
-def transcript(raw, *, seq=1, pfunc=0x40, response=0, fragments=None, drain=b''):
-    """Independent peer fixture following pinned PMCA read boundaries."""
+def transcript(raw, *, seq=1, pfunc=0x40, response=0, fragments=None, empty_boundaries=True):
+    """Own transcript with optional empties between data/continuation headers.
+
+    Cross-request terminal empties are tested with the ordered Wire fixture.
+    """
     out = []
     for start in range(0, max(1, len(raw)), 0x100000):
         rest = raw[start:]
@@ -23,8 +26,8 @@ def transcript(raw, *, seq=1, pfunc=0x40, response=0, fragments=None, drain=b'')
             block = frame[at:at + 0x8000]
             size = fragments or len(block)
             out.extend(('data', block[n:n + size]) for n in range(0, len(block), size))
-            if len(block) % 0x200 == 0:
-                out.append(('drain', drain))
+            if empty_boundaries and len(block) % 512 == 0 and start + at + len(block) < len(raw):
+                out.append(('data' if at + len(block) < len(frame) else 'header', b''))
     return out
 
 
@@ -134,10 +137,10 @@ class ProtocolTests(unittest.TestCase):
         self.assertIsNone(self.c.selected)
         with self.assertRaises(ValueError): self.c.begin('read:cpapp-b.bin', self.sink('read:cpapp-b.bin'))
 
-    def test_fragmented_data_and_nonzero_separate_drain(self):
+    def test_fragmented_data_and_optional_empty_transfers(self):
         sink = self.begin()
         raw = b'q' * (p.BLOCK + 512)
-        records = transcript(raw, fragments=101, drain=b'not-assumed-zero')
+        records = transcript(raw, fragments=101)
         result = deliver(self.c, records)
         self.assertEqual(result['payload']['sha256'], hashlib.sha256(raw).hexdigest())
         self.assertEqual(sink.size, len(raw))
@@ -148,15 +151,17 @@ class ProtocolTests(unittest.TestCase):
         self.assertFalse(result['response_profile_verified'])
         self.assertFalse(result['camera_operations_performed'])
 
-    def test_zero_length_drain_is_valid_distinct_result(self):
+    def test_zero_length_transfer_before_header_does_not_finish_response(self):
         self.begin()
+        self.assertIsNone(self.c.feed(b''))
+        self.assertTrue(self.c.active)
         deliver(self.c, transcript(b'z' * 512))
         self.assert_healthy_exit_once()
 
     def test_multiframe_response_and_single_sequence(self):
         sink = self.begin()
         raw = b'x' * (p.FRAME + 512)
-        result = deliver(self.c, transcript(raw, drain=b'D' * 512))
+        result = deliver(self.c, transcript(raw))
         self.assertEqual(result['frames'], 2)
         self.assertEqual(sink.size, len(raw))
         self.assertEqual(self.c.sequence, 2)
@@ -166,7 +171,7 @@ class ProtocolTests(unittest.TestCase):
         self.begin()
         records = transcript(b'z' * (2 * p.FRAME + 1))
         for i, (kind, raw) in enumerate(records):
-            if kind == 'header' and struct.unpack_from('<I', raw)[0] > p.FRAME:
+            if kind == 'header' and raw and struct.unpack_from('<I', raw)[0] > p.FRAME:
                 records[i] = (kind, struct.pack('<I', 3 * p.FRAME) + raw[4:])
         deliver(self.c, records)
         self.assertFalse(self.c.unknown)
@@ -251,12 +256,14 @@ class ProtocolTests(unittest.TestCase):
         with self.assertRaises(ValueError): self.c.next_read()
         self.assert_unknown()
 
-    def test_drain_counts_toward_wire_budget_not_payload(self):
+    def test_empty_transfer_has_no_bytes_but_cannot_bypass_wire_bound(self):
         self.begin()
-        records = transcript(b'd' * 512, drain=b'Q' * 512)
-        deliver(self.c, records[:-1])
-        self.assertEqual(self.budget.used, 512)
-        self.c.wire_limit = self.c.wire_bytes + 511
+        before = self.c.wire_bytes
+        self.c.feed(b'')
+        self.assertEqual(self.c.wire_bytes, before)
+        self.assertEqual(self.c.feeds, 1)
+        self.assertEqual(self.budget.used, 0)
+        self.c.wire_limit = self.c.wire_bytes + 11
         with self.assertRaises(ValueError): self.c.next_read()
         self.assert_unknown()
 
@@ -274,8 +281,8 @@ class ProtocolTests(unittest.TestCase):
         self.c.abort()
         self.assert_unknown()
 
-    def test_empty_or_excessive_data_rejected(self):
-        for raw in (b'', b'xx', bytearray(b'x')):
+    def test_nonbytes_or_excessive_data_rejected(self):
+        for raw in (None, b'xx', bytearray(b'x')):
             with self.subTest(raw=raw):
                 self.c = p.OfflineChannel('dummy', budget=self.budget)
                 self.begin()
@@ -283,13 +290,13 @@ class ProtocolTests(unittest.TestCase):
                 with self.assertRaises(ValueError): self.c.feed(raw)
                 self.assert_unknown()
 
-    def test_missing_drain_prevents_complete(self):
+    def test_aligned_payload_finishes_without_scheduling_drain(self):
         self.begin()
-        deliver(self.c, transcript(b'z' * 512)[:-1])
-        self.assertTrue(self.c.active)
-        self.assertIsNone(self.c.result)
-        self.c.abort()
-        self.assert_unknown()
+        result = deliver(self.c, transcript(b'z' * 512))
+        self.assertEqual(result['payload']['bytes'], 512)
+        self.assertFalse(self.c.active)
+        with self.assertRaises(RuntimeError): self.c.next_read()
+        self.assert_healthy_exit_once()
 
     def test_extra_bytes_after_complete_never_start_next_reply(self):
         self.begin()
@@ -311,17 +318,6 @@ class ProtocolTests(unittest.TestCase):
         deliver(self.c, transcript(bytes(4), fragments=1))
         self.assertEqual(self.budget.used, 0)
         self.assertEqual(self.c.selected, 'cpapp-b.bin')
-
-    def test_drain_content_cannot_prove_frame_identity(self):
-        # Upstream ignores drain bytes. Even header-shaped bytes are opaque,
-        # so this parser cannot establish a real USB transfer's identity.
-        c = p.OfflineChannel('dummy', budget=self.budget)
-        spec = c.requests['ram']; c.begin('ram', Sink(spec.limit, budget=self.budget))
-        deliver(c, transcript(b'z' * 512)[:-1])
-        c.feed(struct.pack('<IHH4B', 1, 0x40, 1, 0, 0, 0, 0))
-        self.assertFalse(c.active)
-        self.assertEqual(c.result['payload']['bytes'], 512)
-        self.assertFalse(c.result['physical_protocol_verified'])
 
     def test_final_sink_stored_and_read_back_with_protocol_payload_only(self):
         import tempfile

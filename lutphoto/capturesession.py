@@ -114,8 +114,11 @@ class SyntheticPeer:
                 at = max(0, offset - len(prefix)); count = length - len(head)
                 block = bytes([raw.byte]) * count if type(raw) is Pattern else raw[at:at + count]
                 yield head + block
-                if length % 512 == 0:
-                    yield b''  # Explicit fake drain result, not file payload.
+                if length % 512 == 0 and offset + length < size:
+                    # Optional empty transfer before more data/header bytes.
+                    # Terminal empties across requests are covered by ordered
+                    # raw-queue tests, not this per-response generator.
+                    yield b''
 
 
 class _Run:

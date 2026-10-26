@@ -9,7 +9,7 @@ import re
 import secrets
 from dataclasses import dataclass
 
-from . import captureowned as o, capturepreflight, bk4
+from . import captureowned as o, capturepreflight, bk4, captureidentity
 from .capturecontrol import Cancellation
 from .capturesignals import SignalCancellation
 from .capturestore import Budget, Store, encoded
@@ -41,10 +41,16 @@ class _CaptureRun(o._OwnedRun):
         self.event('CAPTURE_LOCKS_HELD',global_lease_present=True,job_lock_present=True)
         self.store.require_space(maximum)
 
-    def snapshot(self,*args,**kwargs):
+    def snapshot(self,name,relative,*,end=False):
         if self.programs_matched and not self.program_marker:
             self.event('PROGRAM_PAIR_MATCHED',kind='stock');self.program_marker=True
-        return super().snapshot(*args,**kwargs)
+        super().snapshot(name,relative,end=end)
+        # Keep the current MSC entry/return contract. Independently compare all
+        # four already-read snapshots against that identity before proceeding.
+        # This adds no device request and does not relabel BK4 as an MSC query.
+        expected=self.host.initial[1]
+        observed=captureidentity.from_snapshot(self.store.read(relative,self.files[relative]),model=expected['model'])
+        captureidentity.require_match(observed,expected)
 
     def report(self,*args,**kwargs):
         raise RuntimeError('Native checkpoint cannot use a synthetic report')

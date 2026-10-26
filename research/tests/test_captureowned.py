@@ -10,12 +10,14 @@ from unittest.mock import patch
 from lutphoto import captureowned as o, captureinspect as i, capturestore, capturemsc
 from research.tests import test_capturepipeline as fixture, test_captureauth as auth
 from research.tests.test_capturemsc import tape, model_response
+from research.tests.test_captureidentity import snapshot_with_serial
 
 
 class OwnedTests(unittest.TestCase):
     def setUp(self):
         f=fixture.PipelineTests(methodName='runTest');f.setUp();self.addCleanup(f.doCleanups)
-        self.fixture,self.root,self.files=f,f.root,f.files
+        self.fixture,self.root=f,f.root
+        self.files={**f.files, **{name:snapshot_with_serial(f.files[name]) for name in ('ram','saved')}}
         patch.object(capturemsc,'verify_sources',return_value=(auth.PIN,{})).start();self.addCleanup(patch.stopall)
 
     def system(self,*,files=None,initial=None,returned=None,normal_options=None,service_options=None,system_options=None,**peer_options):

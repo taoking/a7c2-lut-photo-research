@@ -10,7 +10,7 @@
 
 - **只有CUBE/参考图、还没内部备份：** 用[纯机外preview](docs/COMPUTER-ONLY-PREVIEW.md)拟合/看图/看超限原因，无需归档或机身材料；真实机内色彩尚未验证。
 - **现在先运行完整离线演示：** [统一入口与结果说明](docs/OFFLINE-WORKFLOW.md)，串通CUBE拟合、参考图/误差、私人包与程序/名称/设置逆向检查；默认材料全自制，无需相机。
-- **跟进开发：** [后续交付计划](docs/DELIVERY-PLAN.md)按“名称/设置收口→统一离线演练→真实只读采集→单槽验证→摄影验收”推进；[当前交接](research/HANDOFF.md)列下一动作。D1–D3离线冻结，D4最新实测仍为KEY_VALIDATE/BUS、6事件/0材料。第七十二轮已按固定库定义[修正总线0有效域](docs/CAPTURE-BUS-COMPATIBILITY.md)，1080项回归及16项单次准备通过；本人选择保持现状、稍后采集，尚无新实机结果，旧UNKNOWN不回填。
+- **跟进开发：** [后续交付计划](docs/DELIVERY-PLAN.md)按离线演练、真实只读采集、单槽与摄影验收推进；[当前交接](research/HANDOFF.md)列下一动作。D1–D3离线冻结，D4仍0材料。[第七十七轮](research/LUT链路调查记录-第七十七轮.md)完成[有限服务入口](docs/CAPTURE-SERVICE-PROBE.md)的单次准备与172文件冻结，1122项离线回归及15项准备测试通过；本人已确认MSC/官方原厂2.01，待现场运行受控小范围验证。本入口只读一份快照，旧完整入口仍保留MSC检查，第72轮准备继续暂停。
 - **获取内部材料：** 另读[首次采集说明](docs/CAPTURE-FIRST-USE.md)，仅支持固定原厂2.01/完整程序身份；本人已确认官方2.01，最新失败保留UNKNOWN，不能重跑示例试错。
 - **安装旧FL2/FL3：** 使用[旧安装指南](docs/AI-INSTALL.md)及下方教程；它有独立的适用条件、操作范围和验证边界，新LUT尚未提供机内安装入口。
 
@@ -29,6 +29,10 @@
 我们的新增工作是 macOS USB 接管、流程与错误处理、备份核验及简明/AI安装教程。上述移植研究与基础工具的贡献归各原作者；固定提交、许可和完整致谢见 [ACKNOWLEDGEMENTS.md](ACKNOWLEDGEMENTS.md)。
 
 > **相机安装工具：这是实验性相机改装，有无法正常开机的风险，备份不保证能救砖。** 继承的 Mac 适配工具已有固定提交的 `verify` 实机记录；其通用版首次备份、安装和恢复仍未实机测试。[查看验证来源与范围](docs/VALIDATION.md)
+
+回滚与后续更新的完整评估见[全项目实现与回滚安全评估](docs/ROLLBACK-SAFETY-REVIEW.md)：区分离线逆向、正常撤销、中断恢复和无法启动时的救援，并列出后续实现与写入验收门槛。[持续供电更新方案](docs/POWERED-UPDATE-SAFETY.md)进一步限定首版的阶段恢复、时间预算和每轮可用性验收。当前不能承诺断电可恢复或未来官方更新兼容。
+
+[硬件平台与独立恢复入口调查](docs/HARDWARE-RECOVERY-RESEARCH.md)已从索尼公开内核核对ARM64／CXD90057平台，并梳理同系列相机的BootROM／RAM恢复研究和最新上游原厂功能恢复边界；A7C II独立入口与写回闭环仍未实机验证。
 
 > **已知安装中断问题：** [Issue #2](https://github.com/MDHan/a7c2-fl23-macos/issues/2) 报告在 `writing_settings` 因 `0x02770015` 变化停止。此时程序可能已经写入，但收尾未完成，不能直接重装。专项 `diagnose` 仅经过离线测试、尚未真机验证；它会进入服务模式并运行临时模块，仍存在设备操作风险。请先阅读 [适用条件、风险和诊断方法](docs/INTERRUPTED-INSTALL.md)，再自行决定是否运行。
 

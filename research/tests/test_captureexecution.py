@@ -19,6 +19,7 @@ from research.tests import test_captureowned as fixtures, test_capturesignals as
 from research.tests.native_sdk_fixture import World, Device
 from research.tests.test_capturemsc import tape
 from lutphoto import capturediagnostics as diagnostics
+from research.tests.test_captureidentity import snapshot_with_serial
 
 
 class ExecutionTests(unittest.TestCase):
@@ -66,6 +67,36 @@ class ExecutionTests(unittest.TestCase):
         self.assertEqual(e.exit_code(result),0);self.assertEqual(len(json.loads((d/e.CHECKPOINT).read_bytes())['files']),74)
         self.assertEqual(e.inspect_directory(d,receipt=r)['classification'],'CONSISTENT_EXERCISE_RECORDS')
         self.assertEqual(w.system.service_device.counts['control'],2)
+
+    def test_snapshot_identity_mismatch_stops_at_each_of_four_read_positions(self):
+        for name in ('ram','saved'):
+            for end in (False,True):
+                with self.subTest(name=name,end=end):
+                    wrong=snapshot_with_serial(self.files[name],b'\x04\x03\x02\x01')
+                    # Existing color/protected scopes do not catch this ID change.
+                    self.assertEqual(o.s._scope(wrong),o.s._scope(self.files[name]))
+                    options={'changes':{name:wrong}} if end else {'files':self.files|{name:wrong}}
+                    result,w,d,r=self.make(name+str(end),**options)
+                    self.assertEqual(e.exit_code(result),1)
+                    self.assertEqual(result['errors'][0],{'stage':'body','reason_type':'ValueError'})
+                    self.assertFalse(result['material_observations_complete'])
+                    checkpoint=json.loads((d/e.CHECKPOINT).read_bytes())
+                    self.assertFalse(checkpoint['flow']['outcome_unknown'])
+                    self.assertTrue(checkpoint['flow']['service_stop_ack'])
+                    self.assertEqual(w.system.service_device.counts['control'],2)
+                    self.assertEqual(checkpoint['flow']['identity_queries'],2)
+                    self.assertEqual(w.system.peer.counts[name],2 if end else 1)
+                    if name=='ram':self.assertEqual(w.system.peer.counts.get('saved',0),1 if end else 0)
+                    self.assertEqual(e.inspect_directory(d,receipt=r)['classification'],'NEEDS_REVIEW_INCOMPLETE')
+
+    def test_missing_snapshot_serial_stops_without_replacing_msc_identity(self):
+        result,w,d,r=self.make(files=self.files|{'ram':snapshot_with_serial(self.files['ram'],None)})
+        self.assertEqual(e.exit_code(result),1)
+        checkpoint=json.loads((d/e.CHECKPOINT).read_bytes())
+        self.assertEqual(checkpoint['observations']['initial']['serial_source'],'sony-get-camera-info')
+        self.assertEqual(checkpoint['observations']['initial'],checkpoint['observations']['returned'])
+        self.assertNotIn('wire:saved',w.system.peer.trace)
+        self.assertEqual(e.inspect_directory(d,receipt=r)['terminal_evidence'],'MATCHED_FAILURE')
 
     def test_known_content_rejection_and_unknown_response_have_distinct_evidence(self):
         for name,options,want in [('reject',{'files':self.files|{'appFw.so':bytes(len(self.files['appFw.so']))}},'INCOMPLETE'),

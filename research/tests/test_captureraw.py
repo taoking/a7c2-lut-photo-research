@@ -113,7 +113,7 @@ class RawTests(unittest.TestCase):
             self.assertEqual(result['phase'],'SIMULATED_AUTHENTICATED_CAPTURE_COMPLETE')
 
     def test_bad_byte_array_type_none_mutable_or_oversize_read_stops(self):
-        for index,value in enumerate((None,bytearray(12),array('I',[0]*3),array('B',[0]*13),b'')):
+        for index,value in enumerate((None,bytearray(12),array('I',[0]*3),array('B',[0]*13))):
             result,_,_,service,_=self.make(str(index),service_options={'faults':{('read',8):value}})
             self.assertTrue(result['simulated_outcome_unknown'])
             self.assert_no_commands_after_failure(service,'read',8)
