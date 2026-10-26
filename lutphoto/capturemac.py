@@ -336,6 +336,11 @@ class _Host:
     def __init__(self,ops,event,*,firmware,battery_percent,budget=None,cancel=None,wait=False):
         if firmware!='2.01' or type(firmware) is not str or type(battery_percent) is not int or not 50<=battery_percent<=100:
             raise ValueError('Explicit supported version and actual battery prerequisite required')
+        self._initialize(ops,event,firmware=firmware,battery_percent=battery_percent,
+                         budget=budget,cancel=cancel,wait=wait)
+
+    def _initialize(self,ops,event,*,firmware,battery_percent,budget,cancel,wait):
+        """Lifecycle fields after the owning frontend validates declarations."""
         self.cancel=Cancellation() if cancel is None else cancel
         if type(self.cancel) is not Cancellation or type(wait) is not bool:raise TypeError('Exact cooperative token and wait mode required')
         self.wait_enabled=wait;self.last_wait_timeout=None

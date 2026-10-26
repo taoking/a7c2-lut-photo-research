@@ -28,15 +28,15 @@ class CameraTests(unittest.TestCase):
 
     @contextlib.contextmanager
     def bound(self,world,*,env=None):
-        prepare=x._prepare
+        prepare=x._source_preflight
         def prepared(*args,**kwargs):
             value=prepare(*args,**kwargs)
-            world.system.service_device._requests=value.channel.requests
+            world.system.service_device._requests=value[1].requests
             return value
         with world.bound(),patch.object(o.programidentity,'_load_policy',return_value=self.policy),\
              patch.object(x.capturepreflight,'_environment',return_value=self.env if env is None else env),\
              patch.object(o.m._NativeOps,'__new__',return_value=world.ops),\
-             patch.object(o.m._NativeOps,'__init__',return_value=None),patch.object(x,'_prepare',side_effect=prepared):
+             patch.object(o.m._NativeOps,'__init__',return_value=None),patch.object(x,'_source_preflight',side_effect=prepared):
             yield
 
     def args(self,name='camera',**changes):

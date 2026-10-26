@@ -16,8 +16,8 @@ from .capturecontrol import Cancellation
 from .capturesignals import SignalCancellation
 from .capturestore import Budget, Store, Sink, encoded
 
-SCHEMA='a7c2-service-probe-result/1'
-CLI_SCHEMA='a7c2-service-probe-cli-result/1'
+SCHEMA='a7c2-service-probe-result/2'
+CLI_SCHEMA='a7c2-service-probe-cli-result/2'
 SNAPSHOT='evidence/service-identity.bin'
 UNPROVEN=('normal_identity_rechecked','program_fingerprints_verified','complete_backup',
           'restore_verified','write_plan_enabled','resume_allowed')
@@ -27,8 +27,32 @@ def _location(key):
     return {'pid':key.pid,'bus':key.bus,'ports':list(key.ports),'address':key.address}
 
 
+@dataclass(frozen=True)
+class _Power:
+    battery_percent: int | None
+    maintained_power: bool
+
+    def __post_init__(self):
+        if type(self.maintained_power) is not bool:raise ValueError('Explicit power declaration required')
+        if self.maintained_power:
+            if self.battery_percent is not None:raise ValueError('Choose one power declaration')
+        elif type(self.battery_percent) is not int or not 50<=self.battery_percent<=100:
+            raise ValueError('Actual percentage or maintained high-battery USB power required')
+
+    def report(self):
+        return {'mode':'maintained-high-battery-usb' if self.maintained_power else 'declared-percentage',
+                'battery_percent':self.battery_percent,'automatically_measured':False}
+
+
 class _ProbeHost(o.m._Host):
     """Same ownership/port rules, with explicitly absent initial body identity."""
+    def __init__(self,ops,event,*,firmware,power,budget,cancel,wait):
+        if type(firmware) is not str or firmware!='2.01' or type(power) is not _Power:
+            raise ValueError('Supported firmware and explicit probe power required')
+        self.power=power
+        self._initialize(ops,event,firmware=firmware,battery_percent=power.battery_percent,
+                         budget=budget,cancel=cancel,wait=wait)
+
     def normal(self):
         if self.stage!='NEW':raise RuntimeError('No second probe entry')
         self.stage='INITIAL_ATTEMPT'
@@ -82,24 +106,69 @@ def _model(owner):
 
 @dataclass(frozen=True)
 class _Prepared:
-    capture: object
+    directory: object
+    firmware: str
+    power: _Power
+    policy: object
+    channel: object
     keys: object
 
 
-def _prepare(archive,directory,*,firmware,battery_percent):
-    prepared=x._prepare(archive,directory,firmware=firmware,battery_percent=battery_percent,resources=False)
+def _prepare(archive,directory,*,firmware,power):
+    if type(firmware) is not str or firmware!='2.01' or type(power) is not _Power:
+        raise ValueError('Explicit probe declarations required')
+    policy,channel=x._source_preflight(archive,directory,resources=False)
     _,keys=a._keys(archive)  # All pinned source/key work finishes before native construction.
-    channel=prepared.channel
     channel.requests={'ram':channel.requests['ram']}
     channel.guard_names=()
     channel.wire_limit=bk4.MAX_SNAPSHOT+65536
-    return _Prepared(prepared,keys)
+    return _Prepared(directory,firmware,power,policy,channel,keys)
+
+
+class _ProbePort(o._OwnedPort):
+    """Only the first normal START has a reviewed, provisional PIPE outcome.
+
+    Based on YuuLuo f124d87 service_probe.start; see round 78. Narrower than
+    that source: exact SDK USBError, -9 AND errno 32, only normal-side START.
+    Descriptor checks and postchecks are outside the control exception scope.
+    No retry, clear-halt, reset, synthetic ACK or clearing of unknown flags.
+    """
+    def __init__(self,owner,channel,observation):
+        super().__init__(owner,channel)
+        self.start_observation=observation;self.start_pending=False
+
+    def normal_start(self):
+        observation=self.start_observation
+        try:
+            if self.pid!=o.m.NORMAL or self.started or self.stopped or self.authenticated:
+                raise RuntimeError('One first normal START only')
+            self.started=True
+            observation['boundary']='PRECHECK';self._ready()
+            ops=self.owner.host.ops
+            usb_error=ops._runtime()[0].USBError
+            remaining=int((self.budget.deadline-self.budget.clock())*1000)
+            if remaining<=0:raise TimeoutError('Normal START deadline expired')
+            observation['boundary']='CONTROL';observation['control_status']='UNKNOWN'
+            try:
+                value=ops.control(self.owner.device,*a.START,b'',min(5000,remaining))
+            except Exception as error:
+                # Only the SDK call above can produce the provisional status.
+                if (type(error) is not usb_error or type(error.backend_error_code) is not int
+                        or error.backend_error_code!=-9 or type(error.errno) is not int or error.errno!=32):raise
+                observation['control_status']='PIPE';self.start_pending=True
+            else:
+                if type(value) is not int or value!=0:raise ValueError('Explicit zero-length START required')
+                observation['control_status']='ACK'
+            observation['boundary']='POSTCHECK';self._ready()
+            observation['boundary']='COMPLETE'
+        except BaseException:
+            self.unknown=self.owner.unknown=True;raise
 
 
 class _Run:
     def __init__(self,prepared,host,store,result):
         self.prepared,self.host,self.store,self.result=prepared,host,store,result
-        self.channel=prepared.capture.channel
+        self.channel=prepared.channel
         self.ports=[];self.auth=[];self.service=None;self.stage='INITIAL'
 
     def event(self,name,**details):
@@ -116,14 +185,24 @@ class _Run:
 
     @property
     def unknown(self):
-        return self.channel.unknown or any(p.unknown for p in self.ports+self.auth+self.host.owners)
+        return (self.channel.unknown or any(p.unknown for p in self.ports+self.auth+self.host.owners)
+                or any(isinstance(p,_ProbePort) and p.start_pending for p in self.ports))
 
     def authenticate(self,owner,label):
-        port=o._OwnedPort(owner,self.channel);self.ports.append(port)
+        port=(_ProbePort(owner,self.channel,self.result['normal_start']) if label=='NORMAL'
+              else o._OwnedPort(owner,self.channel))
+        self.ports.append(port)
         auth=a._RawAuth(o.r._AuthView(port),self.prepared.keys,self.channel.budget);self.auth.append(auth)
-        self.action(label+'_START',auth.control)
+        if label=='NORMAL':
+            self.stage='NORMAL_START';self.host.check();self.event('INTENT',operation=self.stage)
+            port.normal_start();self.host.check()
+            if port.start_pending:
+                self.event('NORMAL_START_PIPE',errno=32,backend_error_code=-9,authentication_required=True)
+            else:self.event('ACK',operation=self.stage)
+        else:self.action(label+'_START',auth.control)
         def verify():
-            auth.authenticate();port.authenticated=True
+            auth.authenticate();self.host.check();port.authenticated=True
+            if label=='NORMAL':port.start_pending=False
             self.result['facts'][label.lower()+'_authenticated']=True
         self.action(label+'_VERIFY',verify)
         return port,auth
@@ -165,6 +244,7 @@ class _Run:
 def _failure(result,stage,error):
     # Types and bounded numbers only; no exception text, payloads or paths.
     item={'stage':stage,'reason_type':x._error_name(error),'host_operation':result['last_host_operation']}
+    item['start_boundary']=result['normal_start']['boundary'] if stage=='NORMAL_START' else None
     for name in ('errno','backend_error_code'):
         try:value=getattr(error,name,None)
         except BaseException:value=None
@@ -173,14 +253,16 @@ def _failure(result,stage,error):
 
 
 def _execute(prepared,host):
-    p=prepared.capture
+    p=prepared
     if (type(prepared) is not _Prepared or type(host) is not _ProbeHost or type(host.ops) is not o.m._NativeOps
             or host.used or host.event is not None or host.owners or not host.wait_enabled
-            or host.budget is not p.channel.budget or set(p.channel.requests)!={'ram'}):
+            or host.budget is not p.channel.budget or set(p.channel.requests)!={'ram'}
+            or host.power is not p.power or host.firmware_declared!=p.firmware):
         raise TypeError('Fresh fixed probe assembly required')
     result={'schema':SCHEMA,'private_report':True,'job_id':secrets.token_hex(16),
         'source':{'commit':p.policy.commit,'archive_sha256':p.policy.archive_sha},
-        'declared':{'model':identity.MODEL,'firmware':p.firmware,'battery_percent':p.battery_percent},
+        'declared':{'model':identity.MODEL,'firmware':p.firmware,'power':p.power.report()},
+        'normal_start':{'policy':'normal-start-pipe-32-v1','control_status':'NOT_ATTEMPTED','boundary':None},
         'phase':'NEEDS_REVIEW','snapshot':None,'journal':None,'last_host_operation':None,'host_diagnostics':[],
         'observations':dict.fromkeys(('usb_model','service_identity','initial_location','returned_location')),
         'facts':dict.fromkeys(('device_attempted','normal_authenticated','service_authenticated','snapshot_validated',
@@ -232,9 +314,9 @@ def _execute(prepared,host):
 
 def _run(prepared):
     if type(prepared) is not _Prepared:raise TypeError('Fixed probe preparation required')
-    p=prepared.capture;ops=o.m._NativeOps()
+    p=prepared;ops=o.m._NativeOps()
     p.channel.budget=Budget(bk4.MAX_SNAPSHOT+32768+512,seconds=120,clock=ops.clock)
-    host=_ProbeHost(ops,None,firmware=p.firmware,battery_percent=p.battery_percent,
+    host=_ProbeHost(ops,None,firmware=p.firmware,power=p.power,
                     budget=p.channel.budget,cancel=Cancellation(),wait=True)
     return _execute(prepared,host)
 
@@ -248,12 +330,14 @@ class _Receipt(c._Receipt):
         self._save_raw(encoded(result))
 
 
-def probe(archive,directory,receipt,*,model,firmware,battery_percent):
+def probe(archive,directory,receipt,*,model,firmware,battery_percent=None,maintained_power=False):
     """Authorized single attempt only. Does not authorize a subsequent capture."""
     destination=result=None;started=False;failure=None;secondary=[]
     try:
-        c._declarations(model,firmware,battery_percent,False)
-        prepared=_prepare(archive,directory,firmware=firmware,battery_percent=battery_percent)
+        if type(model) is not str or model!=identity.MODEL or type(firmware) is not str or firmware!='2.01':
+            raise ValueError('Supported model and firmware required')
+        power=_Power(battery_percent,maintained_power)
+        prepared=_prepare(archive,directory,firmware=firmware,power=power)
         destination=_Receipt(receipt,directory)
         started=True;result=_run(prepared);destination.save(result)
     except BaseException as error:failure=error
@@ -283,7 +367,11 @@ def main(argv=None):
     try:
         parser=c._Parser(prog='python -m lutphoto.captureprobe',description=__doc__,allow_abbrev=False)
         for name in ('archive','directory','receipt','model','firmware'):parser.add_argument('--'+name,required=True)
-        parser.add_argument('--battery-percent',required=True,type=int);args=parser.parse_args(argv)
+        power=parser.add_mutually_exclusive_group(required=True)
+        power.add_argument('--battery-percent',type=int)
+        power.add_argument('--maintained-power',action='store_true',
+                          help='Owner declares maintained high battery and USB power; no percentage prompt or measurement')
+        args=parser.parse_args(argv)
         if not sys.stdout.writable():raise OSError('Result stream not writable')
         sys.stdout.flush()
         value=probe(**vars(args));code=0 if value['phase']=='PROBE_COMPLETE' else 1

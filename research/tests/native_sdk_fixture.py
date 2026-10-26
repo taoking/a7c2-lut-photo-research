@@ -16,6 +16,13 @@ from lutphoto import capturecandidate as candidate, captureowned as owned
 m=owned.m
 
 
+class USBError(OSError):
+    """Self-made SDK exception type, never imported from a real USB backend."""
+    def __init__(self,errno,backend_error_code):
+        super().__init__(errno,'self-made USB error')
+        self.backend_error_code=backend_error_code
+
+
 class Device:
     def __init__(self,world,key):
         self.world,self.key=world,key
@@ -77,6 +84,8 @@ class Configuration:
 
 
 class Core:
+    USBError=USBError
+
     def __init__(self,world):self.world=world;self.current=()
     def find(self,*,find_all,idVendor,idProduct,backend):
         w=self.world;s=w.system

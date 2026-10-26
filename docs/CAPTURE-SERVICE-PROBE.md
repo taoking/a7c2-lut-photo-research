@@ -1,56 +1,70 @@
 # 有限服务身份读取：只读一份快照
 
-第76轮新增独立入口`lutphoto.captureprobe`，用于验证USB型号→一次服务认证→服务快照身份的路径。**离线测试通过；首次真机未成功。** 第77轮已完成172文件冻结和15项准备测试，随后首次实测在NORMAL_START边界PIPE(-9/32)处停止；USB型号已读，44事件/0快照，未认证成功。此次已用准备不得重跑，细节与后续见[第77轮](../research/LUT链路调查记录-第七十七轮.md)。旧第72轮准备仍暂停；本页示例不是重跑旧失败作业的指令。
+第78轮完成普通侧首次START的限定PIPE兼容、供电声明和结果`/2`，仅离线验证，尚未执行新版本真机。第77轮旧版本在NORMAL_START边界遇到PIPE(-9/32)、44事件/0快照；该失败保持原样，不能倒推已认证成功。第67/69/71/77轮已用命令禁止重跑，第72轮准备停用。最新接续见[HANDOFF](../research/HANDOFF.md)。
 
-## 范围与结果
+## 范围与供电声明
 
-当前已发布CLI接受本人ILCE-7CM2、声明索尼官方原厂2.01、实际电量50–100；管理员认证仅在本机完成。本人在本次执行后明确要求后续脚本不再询问电量，并承诺持续高电量/连接供电。下一份准备须先用显式供电声明调整入口契约并离线验证，不能填入虚构百分比；此处CLI参数是当前实现，不是要求再次运行。声明不代替机身固件核验：本入口不读取AP/CP，因此`program_fingerprints_verified`始终为false，不能据此导入LUT或开启写入。完整采集仍要求固定完整程序指纹。
+入口仅接受本人ILCE-7CM2、声明索尼官方原厂2.01；管理员认证在本机完成。按本人持续保持高电量及USB供电的约定，后续准备使用`--maintained-power`，不再询问或输入电量。它记录为`declared.power.mode=maintained-high-battery-usb`、`battery_percent=null`、`automatically_measured=false`，不是设备测量或虚构百分比。
 
-执行顺序为：
+API也可显式传入`maintained_power=True`并省略`battery_percent`。原`--battery-percent`仍支持50–100整数，二者互斥且必须选择一种，省略、真假值冒充整数、混用均在设备前拒绝。旧完整采集及安装器当前契约不变；后续接完整采集时再接入明确供电声明，不能为复用旧入口硬填电量。
 
-1. 在设备访问前核对现有固定归档/密钥、环境、新私有作业及独立回执路径。
-2. 取得原有全局排他锁，创建私有作业，确认唯一设备和稳定相机磁盘，正常卸载并接管接口。
-3. 用有时限的标准USB字符串读取确认型号；不发送原MSC型号/序列查询。型号不是唯一机身身份。
-4. 一次普通侧认证，关闭过渡句柄，在同一物理端口等待服务设备，完成一次服务认证。
-5. 只读取一份RAM设置快照，完整解析两份BK4图像，从第一份的四字节属性取得身份摘要。保存的快照含私人信息，不上传。
-6. 健康状态下最多发送一次停止服务，关闭服务句柄，再被动确认普通USB在原端口稳定重现；不打开第三句柄、不重新认证或查询序列。
-7. 关闭作业、释放全局锁、还原信号处理后，保存独立终态回执并输出简短结果。
+本入口不读取AP/CP，因此`program_fingerprints_verified`始终false，不能凭版本或供电声明导入LUT或开启写入。完整采集的固定完整程序指纹门槛保留。
 
-不读取程序、保存态快照或68份资源，不加载模块、写程序、保存设置或处理WBI。服务认证仍会改变临时连接状态。通道只保留`ram`请求，沿用快照大小/读包次数限制，全程120秒合作式期限，单次协议调用不超过5秒、等待窗口不超过20秒。SDK/文件系统管理调用可能阻塞，期限不能保证强制终止；取消仅设置标志，未返回时保持锁和对象。
+执行顺序：
 
-未知传输、认证失败、取消或日志失败后不补发命令；已完整收到但无法解析的快照属于内容拒绝，健康会话仍尝试一次停止。停止成功与普通USB返回分别记录，任何失败都不会自动重试或继续全材料采集。需要收尾时结合实际屏幕/存取灯人工判断，本页不授权强制拔线、重启或取电池。
+1. 设备访问前核对固定归档/密钥、宿主环境、新私有作业及独立回执。
+2. 取得全局排他锁，确认唯一设备与稳定磁盘，正常卸载并接管接口。
+3. 有时限地读取标准USB型号；型号不是唯一机身身份，不发送旧MSC型号/序列查询。
+4. 普通侧首次START后完成全部认证，关闭句柄，在同一物理端口等待服务设备，再完成服务侧START及认证。
+5. 只读取一份RAM设置快照，解析两份BK4图像，从第一份四字节属性取得身份摘要。原快照属于私人资料。
+6. 健康状态下最多发送一次停止服务、关闭服务句柄，被动确认普通USB在原端口稳定重现；没有第三句柄、重新认证或返回序列查询。
+7. 关闭作业、释放租约、恢复信号处理，保存独立回执并输出简短结果。
 
-## 真实CLI与文件
+不读取完整程序、保存态快照或68份资源，不加载机内模块、写程序、保存设置或处理WBI。服务认证改变临时连接状态。全程120秒合作式期限、协议调用最多5秒、单段等待20秒；SDK/文件系统管理可能阻塞，取消不强杀。
 
-只看帮助不会加载SDK或访问USB：
+## 首次START的有限兼容
+
+仅普通设备的第一个START，且**错误来自实际SDK控制调用，类型恰为SDK USBError、backend_error_code精确整数-9、errno精确整数32**时，记录暂定PIPE并继续原认证。普通侧控制请求只发送一次，没有重试、清端点、复位或重置unknown标志。errno缺失、浮点码、其他异常/子类、其他错误码均拒绝。
+
+这不是成功ACK：回执`normal_start.control_status=PIPE`，日志写`NORMAL_START_PIPE`，没有`ACK/NORMAL_START`。只有随后三轮挑战/证明以及最终认证响应均通过，才确认`normal_authenticated`并解除该暂定状态；失败、超时、取消、日志失败仍停止，未完成认证的PIPE保持结果未知。
+
+描述符/就绪检查在控制异常捕获范围之外。服务侧START、STOP和认证读写均沿用严格失败停止规则。完整响应内容拒绝且会话健康时，仍允许原有的一次停止；任何结果都不会自动串接全材料采集。
+
+诊断将`normal_start.boundary`分为PRECHECK、CONTROL、POSTCHECK、COMPLETE，另以NOT_ATTEMPTED、UNKNOWN、ACK、PIPE记录控制结果。失败项的`start_boundary`只在NORMAL_START阶段填写；`last_host_operation`仍只是最近记录的宿主操作。CONTROL也只是SDK调用边界，不证明USB内部状态阶段或故障根因。
+
+来源与局限见[第78轮](../research/LUT链路调查记录-第七十八轮.md)。相关固定研究脚本的START处理只作为行为参考，不把其作者测试视为本项目2.01真机证据。
+
+## CLI与结果版本
+
+查看帮助不加载SDK或访问USB：
 
 ```sh
 .venv/bin/python -S -B -m lutphoto.captureprobe --help
 ```
 
-设备命令的通用参数如下。父目录须已存在并满足运行者所有权/私有权限；作业与外部回执都须全新，不能覆盖旧文件。`ACTUAL_PERCENT`须替换为本人刚查看的整数电量，不能填示例值：
+以下为真实参数说明，实际运行前仍需新建并审阅一次性准备。父目录须存在、属于运行者且为私有目录；作业和外部回执须全新：
 
 ```sh
 sudo .venv/bin/python -u -B -m lutphoto.captureprobe \
   --archive research/materials/upstream-v2.1-audit/a7c2-tools-2.1.zip \
-  --directory /path/to/private/probe-001 \
-  --receipt /path/to/private/probe-001-terminal.private.json \
-  --model ILCE-7CM2 --firmware 2.01 --battery-percent ACTUAL_PERCENT
+  --directory /path/to/private/probe-002 \
+  --receipt /path/to/private/probe-002-terminal.private.json \
+  --model ILCE-7CM2 --firmware 2.01 --maintained-power
 ```
 
-没有`--resources`、后端替换、强制、重试或续跑选项。默认仍只保存本次一份快照；不是完整内部备份，也不是既有备份的再次认领。标准USB型号没有唯一性，服务快照身份也不独立认证物理图像角色或新鲜度。
+没有`--resources`、后端替换、强制、重试或续跑选项。默认最多一份快照，不是完整内部备份。标准USB型号和服务快照身份不能独立证明物理图像角色、新鲜度或返回机身身份。
 
 | 输出 | 意义 |
 | --- | --- |
-| 0 / `PROBE_COMPLETE` | 本次快照身份已解析，停止服务已确认，同端口普通USB已重现，本地收尾和回执传递完成；仅此有限作用域通过 |
-| 1 / `NEEDS_REVIEW` | 读取、身份、停止、返回或本地收尾不完整；保留回执与作业，不重跑 |
-| 1 / `REFUSED_BEFORE_DEVICE` | 声明、来源、环境或输出前置拒绝，未进入设备流程 |
-| 1 / `PROBE_OR_DELIVERY_UNCONFIRMED` | 运行或回执保存/关闭未确认；可能保留空或部分回执，不重新采集 |
-| 1 / `OUTPUT_UNCONFIRMED` | 终端输出不完整；已有回执也不表示CLI成功 |
+| 0 / `PROBE_COMPLETE` | 快照身份已解析、停止确认、同端口普通USB重现及本地交付完成；仅此有限范围 |
+| 1 / `NEEDS_REVIEW` | 读取、认证、停止、返回或本地收尾不完整；保留记录，不重跑 |
+| 1 / `REFUSED_BEFORE_DEVICE` | 声明、来源、环境或输出前置拒绝 |
+| 1 / `PROBE_OR_DELIVERY_UNCONFIRMED` | 运行或回执保存/关闭未确认，可能有空或部分回执 |
+| 1 / `OUTPUT_UNCONFIRMED` | 终端输出不完整，已有回执不代表CLI成功 |
 | 2 / `INVALID_ARGUMENTS` | 参数不匹配，没有进入来源/设备处理 |
 
-私有回执采用`a7c2-service-probe-result/1`；简短输出采用`a7c2-service-probe-cli-result/1`，不输出身份、路径或材料摘要。快照放在作业内`evidence/service-identity.bin`，事件仍为私有日志。回执将`service_stop_confirmed`与`normal_usb_reappeared`分开，并保留固定失败阶段、宿主操作、错误类型及有限数字错误码。`normal_identity_rechecked`、`program_fingerprints_verified`、`complete_backup`、恢复/写入/续跑标志均为false。
+新私有回执schema为`a7c2-service-probe-result/2`，stdout为`a7c2-service-probe-cli-result/2`。变化是`declared.power`、`normal_start`及失败项`start_boundary`；stdout仍不输出身份、路径或材料摘要。`normal_identity_rechecked`、`program_fingerprints_verified`、`complete_backup`、恢复/写入/续跑标志保持false。
 
-回执不是签名或独立物理证明。它与旧完整采集回执不同，**不能交给旧`captureevidence inspect`当成完整采集验证**；当前没有新增独立probe图检查器。第77轮私有读取器只检查回执文件边界、有限字段与明显矛盾，并导出白名单摘要；`scope=receipt-fields-only`、`graph_checked=false`、`hardware_verified=false`，不核验日志图或快照与回执的关联。摘要退出0不能覆盖原调用非0。后续复核须按该有限schema核对原调用结果、私人快照和日志，不能改成旧schema消除拒绝。结果为成功也不自动授权下一次设备会话。
+旧第77轮`/1`回执及私有读取器保持原字节；不能改schema追认兼容成功。准备下一次操作时必须配套新的`/2`摘要读取器和源码冻结。旧`captureevidence inspect`继续拒绝probe结果，当前没有通用probe证据图检查器。回执或摘要不是签名/硬件证明，仍需按范围核对原调用、日志和快照。
 
-完成一次受控真机验证后，先分析身份/退出证据，再决定是否将同一入场方式接入完整采集；旧完整入口仍使用MSC身份查询。完整备份、原生导入与恢复、实际JPEG颜色均留给后续D4–D6。当前接续与停用脚本见[HANDOFF](../research/HANDOFF.md)，实现和测试见[第76轮](../research/LUT链路调查记录-第七十六轮.md)。
+R3通过后先审阅完整采集的服务优先接入，再安排R4全材料和有界复读。完整备份、LUT导入/恢复和真实JPEG颜色仍在D4–D6验收。

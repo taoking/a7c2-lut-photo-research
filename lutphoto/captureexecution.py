@@ -188,13 +188,20 @@ def _prepare(archive,directory,*,firmware,battery_percent,resources=False):
     if (type(firmware) is not str or firmware!='2.01' or type(battery_percent) is not int
             or not 50<=battery_percent<=100 or type(resources) is not bool):
         raise ValueError('Supported firmware and actual battery required')
+    policy,channel=_source_preflight(archive,directory,resources=resources)
+    return _Prepared(archive,directory,firmware,battery_percent,resources,policy,channel)
+
+
+def _source_preflight(archive,directory,*,resources):
+    """Shared source/local assembly; callers validate their own declarations."""
+    if type(resources) is not bool:raise TypeError('Explicit resource selection required')
     checked=capturepreflight.inspect(archive,directory,resources=resources)
     if checked['phase']!='OFFLINE_PREFLIGHT_CHECKED' or not checked['environment']['administrator_context_present']:
         raise ValueError('Local native prerequisites incomplete')
     policy=o.programidentity._load_policy(archive)
     channel=o.OfflineChannel(archive,resources=resources,guards=True)
     channel.budget=Budget(channel.budget.limit+o.p.AUTH_ALLOWANCE+o.IDENTITY_ALLOWANCE)
-    return _Prepared(archive,directory,firmware,battery_percent,resources,policy,channel)
+    return policy,channel
 
 
 def _run(prepared):

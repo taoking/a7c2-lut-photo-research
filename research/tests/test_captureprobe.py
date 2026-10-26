@@ -258,5 +258,159 @@ class ProbeTests(unittest.TestCase):
             with contextlib.redirect_stdout(io.StringIO()) as out:code=p.main(argv)
             self.assertEqual(code,2);self.assertEqual(json.loads(out.getvalue())['phase'],'INVALID_ARGUMENTS')
 
+    def test_normal_start_pipe_requires_complete_auth_without_synthetic_ack(self):
+        world=self.world(normal_options={'faults':{('control',1):sdk.USBError(32,-9)}})
+        args=self.args();result=self.call(world,args)
+        self.assertEqual(result['phase'],'PROBE_COMPLETE')
+        self.assertEqual(result['normal_start'],{'policy':'normal-start-pipe-32-v1','control_status':'PIPE','boundary':'COMPLETE'})
+        self.assertTrue(result['facts']['normal_authenticated']);self.assertFalse(result['facts']['protocol_outcome_unknown'])
+        self.assertEqual(world.system.normal_device.counts['control'],1)
+        self.assertEqual(world.system.normal_device.auth.used,15);self.assertEqual(world.system.peer.trace,['wire:ram'])
+        events=[json.loads(v.read_text()) for v in sorted((args['directory']/'events').glob('*.json'))]
+        self.assertEqual(sum(v['event']=='NORMAL_START_PIPE' for v in events),1)
+        self.assertFalse(any(v['event']=='ACK' and v['details'].get('operation')=='NORMAL_START' for v in events))
+        self.assertTrue(any(v['event']=='ACK' and v['details'].get('operation')=='NORMAL_VERIFY' for v in events))
+
+    def test_only_exact_sdk_pipe_code_pair_is_provisional(self):
+        class Other(OSError):backend_error_code=-9
+        class Derived(sdk.USBError):pass
+        cases=(sdk.USBError(32,-1),sdk.USBError(60,-9),sdk.USBError(None,-9),sdk.USBError(32.0,-9),
+               sdk.USBError(32,-9.0),Other(32,'other'),Derived(32,-9),TimeoutError('late'),KeyboardInterrupt())
+        for i,error in enumerate(cases):
+            world=self.world(normal_options={'faults':{('control',1):error}})
+            result=self.call(world,self.args(str(i)))
+            self.assertEqual(result['phase'],'NEEDS_REVIEW');self.assertTrue(result['facts']['protocol_outcome_unknown'])
+            self.assertEqual(result['normal_start']['control_status'],'UNKNOWN')
+            self.assertEqual(result['errors'][0]['start_boundary'],'CONTROL')
+            self.assertEqual(world.system.normal_device.counts['control'],1)
+            self.assertEqual(world.system.normal_device.counts.get('write',0),0)
+            self.assertFalse(result['facts']['service_stop_attempted'])
+
+    def test_descriptor_pipe_before_or_after_start_is_not_tolerated(self):
+        original=p._ProbePort._ready
+        for count in (1,2):
+            world=self.world(normal_options={'faults':{('control',1):sdk.USBError(32,-9)}});calls=[]
+            def failed(port):
+                calls.append(None)
+                if len(calls)==count:raise sdk.USBError(32,-9)
+                return original(port)
+            with patch.object(p._ProbePort,'_ready',failed):result=self.call(world,self.args(str(count)))
+            self.assertEqual(result['phase'],'NEEDS_REVIEW');self.assertTrue(result['facts']['protocol_outcome_unknown'])
+            self.assertEqual(result['errors'][0]['start_boundary'],'PRECHECK' if count==1 else 'POSTCHECK')
+            self.assertEqual(world.system.normal_device.counts.get('control',0),count-1)
+            self.assertEqual(world.system.normal_device.counts.get('write',0),0)
+
+    def test_service_start_and_stop_pipe_remain_unknown(self):
+        for count in (1,2):
+            world=self.world(service_options={'faults':{('control',count):sdk.USBError(32,-9)}})
+            result=self.call(world,self.args(str(count)))
+            self.assertEqual(result['phase'],'NEEDS_REVIEW');self.assertTrue(result['facts']['protocol_outcome_unknown'])
+            self.assertFalse(result['facts']['service_stop_confirmed'])
+            self.assertEqual(world.system.service_device.counts['control'],count)
+            self.assertIsNone(result['errors'][0]['start_boundary'])
+
+    def test_pipe_pending_auth_rejects_all_invalid_rounds_and_final_status(self):
+        from research.tests.test_captureauth import response
+        # One exact independently encoded failure for each challenge/proof/final reply.
+        for count in range(1,8):
+            faults={('control',1):sdk.USBError(32,-9),('read',count):response(0)}
+            world=self.world(normal_options={'faults':faults})
+            result=self.call(world,self.args(str(count)))
+            self.assertEqual(result['phase'],'NEEDS_REVIEW');self.assertEqual(result['errors'][0]['stage'],'NORMAL_VERIFY')
+            self.assertFalse(result['facts']['normal_authenticated']);self.assertTrue(result['facts']['protocol_outcome_unknown'])
+            self.assertEqual(world.system.normal_device.counts['control'],1)
+            self.assertEqual(world.system.service_device.counts.get('control',0),0);self.assertFalse(world.system.peer.trace)
+
+    def test_pipe_event_failure_stops_before_authentication(self):
+        world=self.world(normal_options={'faults':{('control',1):sdk.USBError(32,-9)}});event=p.Store.event
+        def failed(store,name,**details):
+            if name=='NORMAL_START_PIPE':raise OSError('private log failure')
+            return event(store,name,**details)
+        with patch.object(p.Store,'event',failed):result=self.call(world,self.args())
+        self.assertEqual(result['phase'],'NEEDS_REVIEW');self.assertTrue(result['facts']['protocol_outcome_unknown'])
+        self.assertEqual(world.system.normal_device.counts.get('write',0),0);self.assertFalse(result['facts']['service_stop_attempted'])
+
+    def test_pipe_on_auth_read_or_write_after_start_is_not_tolerated(self):
+        for operation in ('read','write'):
+            faults={('control',1):sdk.USBError(32,-9),(operation,1):sdk.USBError(32,-9)}
+            world=self.world(normal_options={'faults':faults});result=self.call(world,self.args(operation))
+            self.assertEqual(result['phase'],'NEEDS_REVIEW');self.assertEqual(result['errors'][0]['stage'],'NORMAL_VERIFY')
+            self.assertTrue(result['facts']['protocol_outcome_unknown']);self.assertFalse(result['facts']['normal_authenticated'])
+            self.assertEqual(world.system.normal_device.counts['control'],1)
+            self.assertEqual(world.system.service_device.counts.get('control',0),0)
+
+    def test_cancellation_or_deadline_after_pipe_does_not_begin_auth(self):
+        original=ProductDevice.ctrl_transfer
+        for cancellation in (False,True):
+            world=self.world(normal_options={'faults':{('control',1):sdk.USBError(32,-9)}})
+            def expired(device,*request,timeout):
+                try:return original(device,*request,timeout=timeout)
+                finally:
+                    if request[0]==0x43 and device.key.pid==p.o.m.NORMAL:
+                        if cancellation:
+                            import signal
+                            signal.getsignal(signal.SIGTERM)(signal.SIGTERM,None)
+                        else:world.system.now+=121
+            with patch.object(ProductDevice,'ctrl_transfer',expired):result=self.call(world,self.args(str(cancellation)))
+            self.assertEqual(result['phase'],'NEEDS_REVIEW');self.assertTrue(result['facts']['protocol_outcome_unknown'])
+            self.assertEqual(result['errors'][0]['start_boundary'],'POSTCHECK')
+            self.assertEqual(world.system.normal_device.counts.get('write',0),0)
+
+    def test_second_normal_start_is_rejected_without_second_control(self):
+        original=p._ProbePort.normal_start
+        def twice(port):original(port);return original(port)
+        world=self.world()
+        with patch.object(p._ProbePort,'normal_start',twice):result=self.call(world,self.args())
+        self.assertEqual(result['phase'],'NEEDS_REVIEW');self.assertEqual(world.system.normal_device.counts['control'],1)
+        self.assertEqual(world.system.normal_device.counts.get('write',0),0)
+
+    def test_start_ack_requires_exact_zero_not_false_none_or_nonzero(self):
+        for i,value in enumerate((False,None,1,0.0)):
+            world=self.world(normal_options={'faults':{('control',1):value}})
+            result=self.call(world,self.args(str(i)))
+            self.assertEqual(result['phase'],'NEEDS_REVIEW');self.assertEqual(result['normal_start']['control_status'],'UNKNOWN')
+            self.assertEqual(world.system.normal_device.counts.get('write',0),0)
+
+    def test_maintained_power_is_explicit_unmeasured_and_has_no_fake_percentage(self):
+        world=self.world();args=self.args(battery_percent=None,maintained_power=True)
+        result=self.call(world,args)
+        self.assertEqual(result['schema'],'a7c2-service-probe-result/2')
+        self.assertEqual(result['declared']['power'],{'mode':'maintained-high-battery-usb','battery_percent':None,'automatically_measured':False})
+        self.assertEqual(result['phase'],'PROBE_COMPLETE')
+        events=[json.loads(v.read_text()) for v in (args['directory']/'events').glob('*.json')]
+        context=next(v for v in events if v['event']=='SERVICE_PROBE_CONTEXT')
+        self.assertEqual(context['details']['declared'],result['declared'])
+
+    def test_maintained_power_cli_uses_no_input_prompt(self):
+        args=self.args();argv=[]
+        for name,value in args.items():
+            if name!='battery_percent':argv.extend(('--'+name.replace('_','-'),str(value)))
+        argv.append('--maintained-power');world=self.world()
+        with self.bound(world),patch('builtins.input',side_effect=AssertionError('No user prompt')),contextlib.redirect_stdout(io.StringIO()) as out:
+            code=p.main(argv)
+        self.assertEqual(code,0);self.assertEqual(json.loads(out.getvalue())['schema'],'a7c2-service-probe-cli-result/2')
+        with contextlib.redirect_stdout(io.StringIO()):code=p.main(argv+['--battery-percent','75'])
+        self.assertEqual(code,2)
+
+    def test_invalid_power_declarations_refuse_before_paths_or_native(self):
+        class Poison:
+            def __fspath__(self):raise AssertionError('No path access')
+        cases=({'battery_percent':None},{'battery_percent':None,'maintained_power':1},
+               {'maintained_power':True},{'battery_percent':49,'maintained_power':True})
+        for change in cases:
+            args=self.args(archive=Poison(),directory=Poison(),receipt=Poison(),**change)
+            with patch.object(p.x,'_source_preflight',side_effect=AssertionError('No source work')):
+                with self.assertRaises(c.CaptureFailure) as error:p.probe(**args)
+            self.assertEqual(error.exception.phase,'REFUSED_BEFORE_DEVICE')
+
+    def test_shared_full_capture_still_requires_actual_percentage(self):
+        for value in (None,True,49,101):
+            with self.assertRaises(ValueError):p.o.m._Host(None,None,firmware='2.01',battery_percent=value)
+            with patch.object(p.x,'_source_preflight',side_effect=AssertionError('No preflight')):
+                with self.assertRaises(ValueError):p.x._prepare('unused','unused',firmware='2.01',battery_percent=value)
+        result=self.call(self.world(),self.args())
+        self.assertEqual(result['declared']['power'],{'mode':'declared-percentage','battery_percent':75,'automatically_measured':False})
+
+
 
 if __name__=='__main__':unittest.main()

@@ -88,3 +88,5 @@ USB 服务协议来自 [ma1co/Sony-PMCA-RE](https://github.com/ma1co/Sony-PMCA-R
 第六十四轮[D4电脑端真实核验](docs/D4-HOST-READINESS.md)沿用QAQLeonard/ma1co/ajalt固定来源；另检查现装PyUSB、Chris Reed的libusb-package与libusb项目的公开版本接口及各自原许可，未复制/分发其库或头文件。只实际导入/加载并查询静态库版本，不初始化上下文、枚举或操作相机，不把该结果当真实通信/恢复验证。PRIVATE菜单副本只按用户声明归类、忽略发布，未读取内容。
 
 第六十五轮[独立机外预览/诊断](docs/COMPUTER-ONLY-PREVIEW.md)与[摄影准备工作表](docs/PHOTO-ACCEPTANCE-CHECKLIST.md)由本项目编写，继续复用QAQLeonard固定v2.1的原生拟合/编码/坐标模型和既有N2图像/误差实现，原vendored源码/许可保持；不引入新的设备代码、模拟SDK、固件资产或真实机身材料。暂定模型预览、超限报告与自制CLI演练不构成Sony ST、机内色彩或恢复验证。
+
+第78轮参考[YuuLuo固定研究脚本](https://github.com/YuuLuo/a7c2-camera-tools/blob/f124d87c26110a82db54775bfa64a0843ff21410/macos/mac_service_readonly/sony-service-research/service_probe.py)记录的START PIPE行为，以及已固定PMCA协议与本项目第77轮错误码证据，在现有借用端口内编写限定处理。该项目原创代码声明GPL-3.0-only，见[此前许可记录](docs/A7C2-CAMERA-TOOLS-ANALYSIS.md)；本轮未导入或复制其文件、注释或模块，不将它列为MIT代码来源。协议现象与研究贡献归原作者；本项目新增精确SDK异常类型/数字码、普通侧首次调用、描述符边界、暂定状态和完整认证要求，见[第78轮记录](research/LUT链路调查记录-第七十八轮.md)。保留已有QAQLeonard、ma1co及ajalt署名和许可。
