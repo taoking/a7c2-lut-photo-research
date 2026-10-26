@@ -1,52 +1,45 @@
 # LUT 照片开发：当前交接
 
-更新：2026-10-26，第七十八轮。先读根AGENTS、README、[四列计划](../plan.md)、本文件及[第78轮记录](LUT链路调查记录-第七十八轮.md)。历史见[轮次索引](ROUNDS.md)。本轮只有离线开发，没有新USB或管理员操作。
+更新：2026-10-26，第七十九轮。先读根AGENTS、README、[四列计划](../plan.md)、本文件及[第79轮记录](LUT链路调查记录-第七十九轮.md)。历史见[轮次索引](ROUNDS.md)，生产代码边界见[第78轮](LUT链路调查记录-第七十八轮.md)。
 
 ## 当前状态
 
-D1–D3离线冻结；R1/R2及R3有限入口已实现。第78轮普通侧首次START限定PIPE兼容、持续供电声明及结果`/2`离线完成；完整回归1136项通过。**新代码尚未实测，尚无本项目采集正例，D4仍0真实材料。** 完整入口仍先查MSC身份；D5/D6及真正3D LUT支线后置。
+D1–D3离线冻结；R1/R2及R3有限入口已实现。第79轮新版单次准备及/2摘要已完成，冻结172个文件，21项准备检查和31项probe专项通过。**未派发设备命令，新版尚未实测，D4仍0真实材料。** 不继续扩展通用模拟框架；下一动作是根据现场信息执行这份新准备。
 
-第77轮实际失败：USB型号已读，NORMAL_START边界USBError(-9/32)，44事件/0快照，普通/服务认证未完成、协议结果UNKNOWN；本地句柄/作业/租约/信号收尾确认。本人当时确认终端结束、画面正常、7号存取灯灭，最后“仍保持USB连接”；没有之后的断开/菜单/冷启动/拍摄确认。本轮没有再发设备命令，不把旧现场状态当作当前自动测量。
+生产代码基线`39c9b168a2f31189c7e2e490783557e244bb518d`；第78轮1136项回归及[CI](https://github.com/taoking/a7c2-lut-photo-research/actions/runs/40277028386)通过。本轮未改生产代码/公开测试/依赖/固定锁，不把以前全套测试记为本轮执行。有限入口详见[使用范围与契约](../docs/CAPTURE-SERVICE-PROBE.md)。
 
-本人已要求后续脚本不确认/输入电量，并承诺持续高电量和USB供电。此偏好已实现为有限入口的`--maintained-power`，后续准备直接使用该既有约定，不再询问电量、不填98/100等虚构百分比。它是用户声明，回执百分比null、自动测量false。密码仍只在本机终端输入；没有免密sudo或SIP修改。
+第77轮实际失败保留：普通USB型号已读，NORMAL_START处USBError(-9/32)，44事件/0快照、认证未完成、结果UNKNOWN；本地四项收尾确认。本人当时确认终端结束、画面正常、7号存取灯灭，最后“仍保持USB连接”；此后没有断开/菜单/冷启动/拍摄确认，不能当作当前自动观测。
 
-## 下一动作：准备新的/2单次验证
+本人已要求后续脚本不确认/输入电量，并承诺持续高电量和USB供电。新准备直接使用`--maintained-power`，不再询问电量、不填98/100等虚构数字。它是用户声明，回执百分比null、自动测量false。密码仍仅在本机终端输入，没有免密sudo或SIP修改。
 
-1. 阅读[有限入口说明](../docs/CAPTURE-SERVICE-PROBE.md)和本轮实现/测试。停止继续扩展通用模拟框架；下一成果是一份可审阅的新单次操作准备。
-2. 新建本轮之后的独立私有准备、仓库外新作业和外部回执；冻结当前源码、依赖声明和新摘要读取器。旧第77轮schema为/1，其操作文件与读者全部保留，不能改摘要后复用，不能改旧schema追认。
-3. 一次调用`captureprobe.main`，传`--maintained-power`，没有电量输入/确认；不得串接完整采集、重试、复位/清端点、救援或旧prepare/diagnose。沿用私有所有者/新目录及回执排他创建/结果日志noclobber、导入前与摘要子进程前来源核对，管理员密码仅在终端。
-4. 配套`/2`摘要需区分START控制结果、完整普通认证、服务认证、快照、停止确认及普通USB重现；特别保留`normal_start.boundary`和错误`start_boundary`。摘要成功不能覆盖采集失败，未知即停；不把摘要称为图检查器或硬件证明。先用自制成功/失败记录验证，不读取私人材料作测试。
-5. 准备通过后再安排一次设备验证。既有只读范围有效，但旧失败作业不能重跑；相机连接/MSC/固件变化仍要依据实际反馈，不能因旧“仍连接”自动开始。本轮没有新设备脚本，不提供旧脚本执行指令。
-6. 若成功，先审阅服务优先接入完整采集及其供电声明，再安排R4全材料/有界复读；仍要求完整程序指纹。若限定候选在同阶段再失败且无新证据，则转Windows原生只读对照评估或后置Mac，不连续试错。
+## 下一动作：当前现场信息后单次验证
 
-## 关键实现与判定
+已向本人询问当前是否直连Mac、MSC、仍为官方原厂2.01；截至本次交接尚无新反馈。若后续收到回复，以实际消息更新此段，不重复已回答的条件。若暂不连接，则保留准备并后置设备任务。
 
-- [captureprobe](../lutphoto/captureprobe.py)：`_ProbePort.normal_start`只捕获实际SDK控制调用的精确USBError、整数backend -9及errno32，仅普通侧首次START。描述符前后检查在捕获范围之外；缺失errno/其他类型或码、服务START、STOP、读写异常仍拒绝。
-- PIPE只是暂定：`normal_start.control_status=PIPE`及`NORMAL_START_PIPE`事件，没有`ACK/NORMAL_START`。仅三轮挑战/证明及最终认证通过才确认普通认证并结束暂定状态。没有重置unknown或再次START；取消、期限、日志失败仍停止。
-- `normal_start.boundary`为PRECHECK/CONTROL/POSTCHECK/COMPLETE；`control_status`为NOT_ATTEMPTED/UNKNOWN/ACK/PIPE。错误项`start_boundary`仅在NORMAL_START填写。CONTROL定位到SDK调用，不证明USB内部状态阶段；旧`last_host_operation`不是精准错误位置。
-- `_Power`记录百分比模式或持续供电模式，互斥；当前私有结果及stdout为`a7c2-service-probe-result/2`、`a7c2-service-probe-cli-result/2`。新增`declared.power`、`normal_start`和错误边界，旧/1私有读取器不适用新版。
-- [captureexecution](../lutphoto/captureexecution.py)仅抽取来源/环境装配，[capturemac](../lutphoto/capturemac.py)仅抽取宿主字段初始化；完整采集原版本/电量门槛、认证、完整回执/3、检查器不改。未来接完整入口时显式迁移供电声明，不能偷偷填电量绕过旧契约。
+1. 私有定位文件：`research/output/custom-round79/location.private.json`。其中`device_attempt_executed=false`，列出新的operator、reader、command、log、仓库外随机作业/回执路径及3文件SHA-256。本轮没有创建真实采集作业，实际父目录/新路径/管理员上下文在未来运行时校验。
+2. 核对这3份文件及operator内172项`EXPECTED`，核对日志尚不存在。按需重新运行本轮离线准备检查；不要运行生成器覆盖/重建。若源码变化，停止并审阅差异，不能直接更新哈希放行。
+3. 只有实际连接信息满足时，在本人终端启动该command一次，管理员密码仅在终端。它单次调用`captureprobe.main`并用`--maintained-power`；只验证服务入口/一份RAM快照，不自动接完整74材料、写入、重试、复位、清端点、旧prepare/diagnose。
+4. 派发时立即记录实际派发状态，保留结果日志；`PROBE_CLI_EXIT_CODE`和`RECEIPT_SUMMARY_EXIT_CODE`分别判断。摘要是字段读取，退出0不能把采集失败升级。结果不明即停，不能重跑脚本或强制重启。
+5. 核对START控制结果/边界、普通认证、服务认证、快照解析、停止确认、同端口普通USB重现及本地4项收尾。新摘要保留失败阶段/有界错误码；旧`last_host_operation`不是精准失败位置，CONTROL也不证明USB内部故障根因。
+6. 结束后一次核实实际画面与7号存取灯（不是充电灯），安排普通USB收尾并记录是否回到菜单；不从正常画面或电量假定服务退出已证。
+7. R3成功后审阅完整采集的服务优先接入及显式供电声明，再安排R4全材料/有界复读，仍保留完整程序指纹。若同阶段再失败且无新证据，则评估原生Windows只读对照或后置Mac，不连续试错。D5/D6与真正3D LUT支线后置。
 
-固定YuuLuo源码是协议行为参考，头部目标为1.02，不是本项目2.01实测证据；本轮处理比该源码更窄。其GPL-3.0-only声明和贡献见致谢，本轮未导入或复制其源码/注释/模块。已有PMCA认证/许可及固定锁保留。
+## 新准备及结果边界
 
-## 验证和证据位置
+- 新三文件位于`research/output/custom-round79/`，不上传；生成器拒绝已有目标。启动器日志noclobber，私有目录/作业/回执排他检查保留。源码在导入前、电脑预检查后/入口前、摘要子进程前核验。
+- 新reader只接受`a7c2-service-probe-result/2`，输出`a7c2-service-probe-local-summary/2`；供电、START状态/边界、认证/快照/退出与本地收尾分列，失败阶段/错误码白名单输出，拒绝矛盾完成和类型。字段摘要不是证据图检查或硬件证明，不输出身份/材料哈希/路径/原始字节。
+- 第78轮限定兼容仍只有普通侧第一次START、实际SDK USBError精确整数-9/32，随后必须完整认证；PIPE没有伪ACK。服务START/STOP、其他错误、取消/期限/日志失败仍停止。
+- 旧完整采集/安装器及其版本、百分比、完整程序指纹契约不变；接入完整入口时需要显式迁移持续供电声明，不能填假数字绕过旧接口。
 
-Python3.14.6，仅自制SDK/数据。本轮日志在忽略目录`research/output/custom-round78/`。
+## 本轮验证与私人记录
 
-- `.venv/bin/python -B -m unittest research.tests.test_captureprobe research.tests.test_capturecamera research.tests.test_captureauth research.tests.test_captureexecution`：119项通过。
-- `.venv/bin/python -B -m unittest discover -s research/tests -p test_capturemac.py -v`：51项通过。最初模块路径调用因其既有同目录导入失败，改用discover后通过，没有修改该模块。
-- `.venv/bin/python -B -m unittest discover -s research/tests -v`：1089项通过，82.815秒。
-- `.venv/bin/python -B -m unittest discover -s tests -v`：39项通过；`.venv/bin/python -B -m unittest discover -s .upstream/a7c2_fl23_preview/tests -v`：8项通过；全套1136项。
-- `.venv/bin/python -B -m macfl23 check`：来源/资产通过；`custom-round74/check-legacy-receipts.py`：3类自制旧记录不变。
-- `.venv/bin/python -S -B -m lutphoto.captureprobe --help`：互斥参数正确、无SDK/USB。
-- `.venv/bin/python -B research/output/custom-round78/check-round.py`及`git diff --check`：检查通过：16个公开文件、10份文档/243个本地链接、17份固定来源及6份第77轮私人文件未改；旧冻结清单有6个代码/测试路径变化，不能复用旧准备。
+本轮日志在`research/output/custom-round79/`：
 
-新增14项probe测试，总31项，涵盖精确错误对、成功不伪ACK、7次认证回复分别拒绝、前后描述符/读写/服务/STOP异常、取消/期限/日志失败、二次START和供电声明。没有把这些测试称为实机成功，也没有重跑旧设备脚本。
+- `.venv/bin/python -B research/output/custom-round79/test_preparation.py`：21项通过，0.716秒，仅自制SDK/材料，含真实隔离摘要子进程与非管理员拒绝。
+- `.venv/bin/python -B -m unittest research.tests.test_captureprobe`：31项通过，0.988秒。
+- `.venv/bin/python -B -m macfl23 check`及`.venv/bin/python -S -B -m lutphoto.captureprobe --help`：通过，无USB；启动文件`zsh -n`通过。
+- `.venv/bin/python -B research/output/custom-round79/check-round.py`及`git diff --check`：公开范围/链接、172冻结来源、新准备未使用及6份旧私人文件不变检查通过。
 
-## 私人记录及发布
+第77轮原定位文件和失败结果仍在`research/output/custom-round77/`。其3操作文件、原结果log、既有详情检查log及location共6份保持；第67/69/71/77轮已用命令禁止重跑，第72轮暂停。不要运行旧生成器/冻结测试去更新现场。
 
-第77轮定位文件`research/output/custom-round77/location.private.json`记录真实失败；`probe-result.private.log`有CLI退出1、摘要退出0，`existing-details-terminal.private.log`有仅回执字段检查。`device_attempt_executed=true`，原三操作文件和结果字节均保持。第67/69/71/77轮禁止重跑；第72轮暂停。不要再运行旧生成器或旧冻结测试来“更新”现场。
-
-本轮开工HEAD为`c0fbd5f352d5bad14b9686add7877c48996d6a72`，工作区干净；上一轮代码`5a8ed7f`的CI通过不代表本轮CI/真机。按已有授权发布到`lut-photo/main`（taoking/a7c2-lut-photo-research），不推origin；本轮提交/远端与CI状态以Git及最终回执为准。私人脚本/材料/日志不上传。
-
-每轮结束更新本文件、轮次记录和四列计划，区分代码完成、新准备完成、实际派发与设备验收。当前下一轮是“准备/2单次验证”，不能把上一轮已用准备当作待运行。
+本轮按已有授权推送到`lut-photo/main`，不推origin；仅公开文档，私有脚本/材料/日志不上传。本轮提交/远端/CI以Git和最终回执为准。每轮更新本交接、轮次记录和四列计划，明确区分准备完成、实际派发、设备返回与照片验收。

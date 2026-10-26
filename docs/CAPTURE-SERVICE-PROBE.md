@@ -2,6 +2,8 @@
 
 第78轮完成普通侧首次START的限定PIPE兼容、供电声明和结果`/2`，仅离线验证，尚未执行新版本真机。第77轮旧版本在NORMAL_START边界遇到PIPE(-9/32)、44事件/0快照；该失败保持原样，不能倒推已认证成功。第67/69/71/77轮已用命令禁止重跑，第72轮准备停用。最新接续见[HANDOFF](../research/HANDOFF.md)。
 
+第79轮已另建私有单次准备：冻结172个源码/依赖声明及摘要文件，使用`--maintained-power`；21项准备检查和31项probe专项通过。新摘要为`a7c2-service-probe-local-summary/2`，展示供电声明、START控制结果/边界、认证/快照/停止/被动返回和本地收尾，保留失败阶段与有界错误码。它只检查回执字段及基本一致性，不核验完整证据图或证明硬件结果；摘要退出0不能覆盖probe退出失败。准备尚未派发，当前现场信息确认后再进入一次验证。
+
 ## 范围与供电声明
 
 入口仅接受本人ILCE-7CM2、声明索尼官方原厂2.01；管理员认证在本机完成。按本人持续保持高电量及USB供电的约定，后续准备使用`--maintained-power`，不再询问或输入电量。它记录为`declared.power.mode=maintained-high-battery-usb`、`battery_percent=null`、`automatically_measured=false`，不是设备测量或虚构百分比。
